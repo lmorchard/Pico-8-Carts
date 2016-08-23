@@ -10,7 +10,6 @@ __lua__
 --   gps scramble, 
 --   server ddos,
 --   lure module
--- end goal of getting home
 -- better map
 -- grass rustling?
 
@@ -22,10 +21,25 @@ scenes = {
  encounter_escape=5,
  encounter_free=6,
  game_over=7,
- title_screen=8
+ title_screen=8,
+ game_won=9
 }
 
 current_scene = scenes.title_screen
+
+challenge = {
+ encounter_hurt=3,
+ escape_hurt_per_tick=0.2,
+ dodge_hurt=-1,
+ bounce_hurt=-10,
+ escape_chance=0.05,
+ encounter_stun=60,
+ no_balls_frustration=20,
+ escape_frustration=10,
+ encounter_end_frustration=5,
+ dodge_frustration=5,
+ bounce_frustration=15
+}
 
 map_x_max = 128 * 8
 map_y_max = 32 * 8
@@ -34,6 +48,13 @@ baddie_layers = {
  {73,74,75,76},
  {68,69,70},
  {71,72}
+}
+
+frustration_factors = {
+ s73=2.0,
+ s74=1.75,
+ s75=1.0,
+ s76=0.75
 }
 
 ball_throws = {
@@ -59,7 +80,8 @@ directions = {
 tiledirections = {4,5,6,7}
 
 stun_colors = {8,14}
-health_colors = {9,8}
+hurt_colors = {9,8}
+frustration_colors = {8,9,10}
 
 dodgex_pos = {0,28,58}
 dodgey_pos = {64,96,118}
@@ -72,6 +94,10 @@ baddies = {}
 encounter = {}
 
 baddie_scan_range = 14
+
+quitting_steps_start = 30
+quitting_colors = {0,5,13,6,7}
+quitting_replace_colors = {1,2,4,9,8,10,12,15}
 
 function _init()
 	reset_player()
@@ -101,6 +127,8 @@ function _update()
  	update_game_over()
  elseif current_scene == scenes.title_screen then 
  	update_title_screen()
+ elseif current_scene == scenes.game_won then 
+ 	update_game_won()
  end
 end
 
@@ -121,17 +149,22 @@ function _draw()
  	draw_game_over()
  elseif current_scene == scenes.title_screen then 
  	draw_title_screen()
+ elseif current_scene == scenes.game_won then 
+ 	draw_game_won()
  end
 end
 
 function reset_player()
 	player = {
- 	x=64, y=64,
-  dx=0, dy=0, dfriction=0.15,
+ 	x=64,
+  y=64,
+  dx=0,
+  dy=0,
+  dfriction=0.15,
   sprite_idx=0,
   moving=0,
   facing=false,
- 	health=100,
+ 	health=75,
   hurt=0,
  	dodgeh=2,
   dodgev=2
@@ -139,21 +172,26 @@ function reset_player()
 end
 
 function make_baddie(x,y)
- local dir = directions[flr(rnd(4))+1]
-
+ local dir = pick(directions)
  local t = {
   x=x, y=y,
   dx=dir[1], dy=dir[2],
   spd=0.4, ttm=rnd(30),
- 	cr=rnd(9), cstun=0,
+ 	cr=rnd(9), stun=0,
  	sf=0,
  	sprites={},
- 	balls=flr(rnd(6))
+ 	balls=flr(rnd(6)),
+  frustration=0,
+  frustration_anim_steps=0,
+  quitting=false,
+  quitting_steps=0
  } 
  
  for l = 1,count(baddie_layers) do
  	add(t.sprites, pick(baddie_layers[l]))
  end
+
+ t.frustration_factor = frustration_factors['s' .. t.sprites[1]]
  
  add(baddies, t)
  return t
@@ -162,6 +200,15 @@ end
 function update_baddie(t)
  local ox = t.x
  local oy = t.y
+
+ if t.quitting then
+  if t.quitting_steps > 0 then
+   t.quitting_steps -= 1
+  else
+   del(baddies, t)
+  end
+  return
+ end
  
  t.x = min(128, max(0, t.x + t.dx*t.spd))
  t.y = min(128, max(0, t.y + t.dy*t.spd))
@@ -193,8 +240,8 @@ function update_baddie(t)
 end
 
 function update_baddie_scan(t)
- if t.cstun > 0 then
- 	t.cstun -= 1
+ if t.stun > 0 then
+ 	t.stun -= 1
  	t.balls = flr(rnd(6))
  else
   t.cr = ((t.cr + 0.3) % 12)
@@ -202,11 +249,15 @@ function update_baddie_scan(t)
 end
 
 function draw_baddie_scan(t) 
+ if t.quitting then
+  return
+ end
+
  local cx = t.x+3
  local cy = t.y+13
  
- if t.cstun > 0 then
-  local clr = stun_colors[flr(1+((t.cstun/6)%count(stun_colors)))]
+ if t.stun > 0 then
+  local clr = stun_colors[flr(1+((t.stun/6)%count(stun_colors)))]
   circ(cx,cy,5,clr)
  else
   local clr = (t.cr < 9) and 5 or 7
@@ -215,13 +266,23 @@ function draw_baddie_scan(t)
 end
 
 function draw_baddie(t) 
+ if t.quitting then
+  local perc = t.quitting_steps / quitting_steps_start
+  local clr = quitting_colors[flr(count(quitting_colors) * perc) + 1]
+  for idx = 1,count(quitting_replace_colors)  do
+   pal(quitting_replace_colors[idx],clr)
+  end
+ end
  for idx = 1,count(t.sprites) do
    spr(t.sprites[idx], t.x, t.y, 1, 2, false, false)
+ end
+ if t.quitting then
+  pal()
  end
 end
 
 function baddie_in_range(t,x,y)
- if t.cstun > 0 then
+ if t.stun > 0 then
  	return false
  end
  dist = (x - (t.x + 3))^2 + 
@@ -304,9 +365,9 @@ function draw_hud_health()
  local clr
  if player.hurt > 0 then
  	player.hurt -= 1
- 	clr = health_colors[flr(rnd(count(health_colors))+1)]
+ 	clr = hurt_colors[flr(rnd(count(hurt_colors))+1)]
 	else 	
-	 clr = health_colors[1]
+	 clr = hurt_colors[1]
  end
  rectfill(2,2,125*(player.health/100),3,clr)
 end
@@ -328,6 +389,9 @@ end
 function update_overworld()
  foreach(baddies, update_baddie)
 	update_player()
+ if count(baddies) == 0 then
+  init_game_won()
+ end
 end
 
 function draw_overworld()
@@ -365,10 +429,11 @@ function draw_encounter_backdrop()
 end
 
 function throw_ball()
- encounter.baddie.balls -= 1
- if encounter.baddie.balls < 0 then
+ if encounter.baddie.balls < 1 then
+  ball.target = 0
 	 init_encounter_end()
  else
+  encounter.baddie.balls -= 1
   ball.pos = 0
   ball.target = flr(rnd(3)) + 1
   ball.throw = pick(ball_throws[ball.target])
@@ -389,6 +454,8 @@ function resolve_ball()
   init_encounter_escape()
   return true
  else
+  frustrate_baddie(encounter.baddie, challenge.dodge_frustration)
+  hurt_player(challenge.dodge_hurt)
   return false
  end
 end
@@ -425,22 +492,48 @@ function draw_ball()
 end
 
 function draw_encounter_baddie()
- for idx = 1,count(encounter.baddie.sprites) do
-		 zspr(encounter.baddie.sprites[idx], 1, 2, 56, 30, 2)
+ t = encounter.baddie
+
+ for idx = 1,count(t.sprites) do
+		 zspr(t.sprites[idx], 1, 2, 56, 30, 2)
+ end
+
+ rect(49,31,52,60,2)
+ local clr = 8
+ if t.frustration_anim_steps > 0 then
+  t.frustration_anim_steps -= 1
+ 	clr = pick(hurt_colors)
+	else 	
+  clr = frustration_colors[1]
+ end
+ if t.frustration > 0 then
+  local bartop = 59 - ((27/100) * t.frustration)
+  rectfill(50,bartop,51,59,clr)
  end
 end
 
 function hurt_player(amt)
-	player.health -= amt 
+ player.health -= amt
 	player.hurt = 25
  if player.health <= 0 then
+  player.health = 0
   init_game_over()
+ end
+end
+
+function frustrate_baddie(t, amt)
+ t.frustration += amt * t.frustration_factor
+ t.frustration_anim_steps = 30
+ if t.frustration >= 100 then
+  t.frustration = 100
+  t.quitting = true
+  t.quitting_steps = quitting_steps_start
  end
 end
 
 function start_encounter(baddie)
 	encounter.baddie = baddie
- hurt_player(5)
+ hurt_player(challenge.encounter_hurt)
  init_encounter_start()
 end
 
@@ -461,6 +554,9 @@ end
 function init_encounter_start()
  encounter.step = -16
  current_scene = scenes.encounter_start
+ if (encounter.baddie.balls < 1) then
+  frustrate_baddie(encounter.baddie, challenge.no_balls_frustration)
+ end
 end
 
 function update_encounter_start()
@@ -492,8 +588,9 @@ end
 function init_encounter_end()
  encounter.end_step = 0
  encounter.baddie.cr = 0
- encounter.baddie.cstun = 60
+ encounter.baddie.stun = challenge.encounter_stun
  encounter.smoke = {}
+ frustrate_baddie(encounter.baddie, challenge.encounter_end_frustration)
 	current_scene = scenes.encounter_end
  for idx = 1,3+flr(rnd(10)) do
   make_encounter_smoke(60, 120)
@@ -577,11 +674,11 @@ function init_encounter_escape()
  current_scene = scenes.encounter_escape
  encounter.escape_x = 32
  encounter.escape_y = 92
- encounter.escape_chance = 0.05
+ encounter.escape_chance = challenge.escape_chance
 end
 
 function update_encounter_escape()
- hurt_player(0.1)
+ hurt_player(challenge.escape_hurt_per_tick)
 
  local escaping = false
 
@@ -606,6 +703,7 @@ function update_encounter_escape()
  end
 
  if escaping and rnd(1) < encounter.escape_chance then
+  frustrate_baddie(encounter.baddie, challenge.escape_frustration)
   init_encounter_free()
  end
 end
@@ -663,7 +761,7 @@ end
 
 function draw_game_over()
  cls()
- print('you were caught. x to restart', 10, 10)
+ print('you were caught. rest awhile, then x to try again', 1, 1)
  zspr(sprites.ball, 1, 1, 32, 32, 8)
 end
 
@@ -686,6 +784,27 @@ function draw_title_screen()
  cls()
  zspr(sprites.title, 4, 4, 16, 4, 3)
  print('x to start', 48, 110)
+end
+
+game_won = {step=0}
+
+function init_game_won()
+ game_won.step = 0
+ current_scene = scenes.game_won
+end
+
+function update_game_won()
+ game_won.step += 1
+ if btn(5) or btn(4) then
+  reset_player()
+  current_scene = scenes.title_screen
+ end
+end
+
+function draw_game_won()
+ cls()
+ print('you won! this screen sucks!', 1, 1)
+ zspr(sprites.ball, 1, 1, 32, 32, 8)
 end
 
 function find_tile_under(x,y)
