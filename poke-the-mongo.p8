@@ -1,7 +1,7 @@
 pico-8 cartridge // http://www.pico-8.com
 version 8
 __lua__
--- poke the mongo
+-- poke the mongo, v0.3
 -- <me@lmorchard.com>
 
 -- todos:
