@@ -54,10 +54,10 @@ baddie_layers = {
 }
 
 frustration_factors = {
- s73=2.0,
- s74=1.75,
- s75=1.0,
- s76=0.75
+ s73=1.5,
+ s74=1.25,
+ s75=1.25,
+ s76=1.0
 }
 
 ball_throws = {
@@ -85,6 +85,7 @@ tiledirections = {4,5,6,7}
 stun_colors = {8,14}
 hurt_colors = {9,8}
 frustration_colors = {8,9,10}
+smoke_colors = {7, 6, 13, 5, 1}
 
 dodgex_pos = {0,28,58}
 dodgey_pos = {64,96,118}
@@ -94,7 +95,6 @@ cam_y = 0
 
 ball = {}
 baddies = {}
-encounter = {}
 
 baddie_scan_range = 14
 
@@ -104,13 +104,7 @@ quitting_replace_colors = {1,2,4,9,8,10,12,15}
 
 function _init()
 	reset_player()
- make_baddie(12, 12)
- make_baddie(24, 12)
- make_baddie(36, 12)
- make_baddie(48, 12)
- make_baddie(12, 24)
- make_baddie(12, 36)
- make_baddie(12, 48)
+ init_baddies()
 end
 
 function _update()
@@ -172,6 +166,16 @@ function reset_player()
  	dodgeh=2,
   dodgev=2
 	}
+end
+
+function init_baddies()
+ make_baddie(12, 12)
+ make_baddie(24, 12)
+ make_baddie(36, 12)
+ make_baddie(48, 12)
+ make_baddie(12, 24)
+ make_baddie(12, 36)
+ make_baddie(12, 48)
 end
 
 function make_baddie(x,y)
@@ -242,6 +246,22 @@ function update_baddie(t)
  end
 end
 
+function draw_baddie(t) 
+ if t.quitting then
+  local perc = t.quitting_steps / quitting_steps_start
+  local clr = quitting_colors[flr(count(quitting_colors) * perc) + 1]
+  for idx = 1,count(quitting_replace_colors)  do
+   pal(quitting_replace_colors[idx],clr)
+  end
+ end
+ for idx = 1,count(t.sprites) do
+   spr(t.sprites[idx], t.x, t.y, 1, 2, false, false)
+ end
+ if t.quitting then
+  pal()
+ end
+end
+
 function update_baddie_scan(t)
  if t.stun > 0 then
  	t.stun -= 1
@@ -266,32 +286,6 @@ function draw_baddie_scan(t)
   local clr = (t.cr < 9) and 5 or 7
   circ(cx,cy,t.cr,clr)
  end
-end
-
-function draw_baddie(t) 
- if t.quitting then
-  local perc = t.quitting_steps / quitting_steps_start
-  local clr = quitting_colors[flr(count(quitting_colors) * perc) + 1]
-  for idx = 1,count(quitting_replace_colors)  do
-   pal(quitting_replace_colors[idx],clr)
-  end
- end
- for idx = 1,count(t.sprites) do
-   spr(t.sprites[idx], t.x, t.y, 1, 2, false, false)
- end
- if t.quitting then
-  pal()
- end
-end
-
-function baddie_in_range(t,x,y)
- if t.stun > 0 then
- 	return false
- end
- dist = (x - (t.x + 3))^2 + 
-        (y - (t.y + 13))^2
- range = t.cr^2
- return (dist - range) < 7
 end
 
 function update_player()
@@ -333,7 +327,7 @@ function update_player()
  for idx = 1,count(baddies) do
   baddie = baddies[idx]
  	if baddie_in_range(baddie, player.x+4, player.y+4) then
- 	 start_encounter(baddie)
+ 	 init_encounter_start(baddie)
  	 break
  	end
  end
@@ -375,20 +369,6 @@ function draw_hud_health()
  rectfill(2,2,125*(player.health/100),3,clr)
 end
 
-function draw_encounter_hud_balls()
- local nb = encounter.baddie.balls
- local bx = 56 - (5 * nb)
- local by = 44
- for idx=1,nb do
-  spr(sprites.ball, bx + (10 * idx), by)
- end
-end
-
-function draw_encounter_hud()
- draw_hud()
- draw_encounter_hud_balls()
-end
-
 function update_overworld()
  foreach(baddies, update_baddie)
 	update_player()
@@ -407,7 +387,66 @@ function draw_overworld()
  draw_hud()
 end
 
-function update_dodge_player()
+encounter = {}
+
+function init_encounter_start(baddie)
+	encounter.baddie = baddie
+ hurt_player(challenge.encounter_hurt)
+ encounter.step = -16
+ if (encounter.baddie.balls < 1) then
+  pick_baddie_speech('outofballs')
+  frustrate_baddie(encounter.baddie, challenge.no_balls_frustration)
+ else
+  pick_baddie_speech('start')
+ end
+ current_scene = scenes.encounter_start
+end
+
+function update_encounter_start()
+ encounter.step += 1
+ update_encounter_player()
+ if encounter.step > 30 then
+  init_encounter()
+ end
+end
+
+function draw_encounter_start()
+ if encounter.step < 0 then
+  draw_encounter_splash()
+ else
+  camera()
+  draw_encounter_backdrop()
+  draw_encounter_baddie()
+  draw_encounter_player()
+  draw_baddie_speech()
+  draw_encounter_hud()
+ end
+end
+
+function init_encounter()
+ current_scene = scenes.encounter
+ throw_ball()
+end
+
+function update_encounter()
+ update_encounter_player()
+ update_ball()
+ if encounter.baddie.frustration >= 100 then
+  init_encounter_end()
+ end
+end
+
+function draw_encounter()
+ camera()
+ draw_encounter_backdrop()
+ draw_encounter_baddie()
+ draw_baddie_speech()
+ draw_encounter_hud()
+ draw_ball()
+ draw_encounter_player()
+end
+
+function update_encounter_player()
  if btn(0) then player.dodgeh = 1
  elseif btn(1) then player.dodgeh = 3
  else	player.dodgeh = 2 end
@@ -433,13 +472,13 @@ end
 
 function throw_ball()
  if encounter.baddie.balls < 1 then
-  ball.target = 0
 	 init_encounter_end()
  else
   encounter.baddie.balls -= 1
   ball.pos = 0
   ball.target = flr(rnd(3)) + 1
   ball.throw = pick(ball_throws[ball.target])
+  pick_baddie_speech('throw')
  end
 end
 
@@ -453,7 +492,13 @@ function update_ball()
 end
 
 function resolve_ball()
- if ball.target == player.dodgeh then
+ if ball.target == 1 and player.dodgeh != 3 then
+  init_encounter_escape()
+  return true
+ elseif ball.target == 2 and player.dodgev != 3 then
+  init_encounter_escape()
+  return true
+ elseif ball.target == 3 and player.dodgeh != 1 then
   init_encounter_escape()
   return true
  else
@@ -497,187 +542,27 @@ end
 function draw_encounter_baddie()
  t = encounter.baddie
 
- for idx = 1,count(t.sprites) do
-		 zspr(t.sprites[idx], 1, 2, 56, 30, 2)
- end
-
- rect(49,31,52,60,2)
- local clr = 8
+ local df = 8 * (t.frustration / 100)
+ local bx = 56
+ local by = 30
  if t.frustration_anim_steps > 0 then
   t.frustration_anim_steps -= 1
- 	clr = pick(hurt_colors)
-	else 	
-  clr = frustration_colors[1]
+
+ 	bx += (df/2) - rnd(df)
+ 	by += (df/2) - rnd(df)
+ end 	
+
+ for idx = 1,count(t.sprites) do
+		 zspr(t.sprites[idx], 1, 2, bx, by, 2)
  end
- if t.frustration > 0 then
-  local bartop = 59 - ((27/100) * t.frustration)
-  rectfill(50,bartop,51,59,clr)
- end
-end
-
-function hurt_player(amt)
- player.health -= amt
-	player.hurt = 25
- if player.health <= 0 then
-  player.health = 0
-  init_game_over()
- end
-end
-
-function frustrate_baddie(t, amt)
- t.frustration += amt * t.frustration_factor
- t.frustration_anim_steps = 30
- if t.frustration >= 100 then
-  t.frustration = 100
-  t.quitting = true
-  t.quitting_steps = quitting_steps_start
- end
-end
-
-function start_encounter(baddie)
-	encounter.baddie = baddie
- hurt_player(challenge.encounter_hurt)
- init_encounter_start()
-end
-
-function update_encounter()
- update_dodge_player()
- update_ball()
-end
-
-function draw_encounter()
- camera()
- draw_encounter_backdrop()
- draw_encounter_baddie()
- draw_encounter_hud()
- draw_ball()
- draw_encounter_player()
-end
-
-function init_encounter_start()
- encounter.step = -16
- current_scene = scenes.encounter_start
- if (encounter.baddie.balls < 1) then
-  frustrate_baddie(encounter.baddie, challenge.no_balls_frustration)
- end
-end
-
-function update_encounter_start()
- encounter.step += 1
- update_dodge_player()
- if encounter.step > 30 then
-  current_scene = scenes.encounter
-  throw_ball()
- end
-end
-
-function draw_encounter_start()
- if encounter.step < 0 then
-  draw_encounter_splash()
- else
-  camera()
-  draw_encounter_backdrop()
-  draw_encounter_baddie()
-  draw_encounter_player()
-  if (encounter.baddie.balls >= 1) then
-   draw_baddie_speech('found you!')
-  else
-   draw_baddie_speech('no balls!')
-  end
-  draw_encounter_hud()
- end
-end
-
-function init_encounter_end()
- encounter.end_step = 0
- encounter.baddie.cr = 0
- encounter.baddie.stun = challenge.encounter_stun
- encounter.smoke = {}
- frustrate_baddie(encounter.baddie, challenge.encounter_end_frustration)
-	current_scene = scenes.encounter_end
- for idx = 1,3+flr(rnd(10)) do
-  make_encounter_smoke(60, 120)
- end
-end
-
-smoke_colors = {7, 6, 13, 5, 1}
-
-function make_encounter_smoke(bx, by)
- local s = {
-  x=bx  + (5-rnd(10)),
-  y=by - rnd(5),
-  r=rnd(15),
-  active=true,
-  ttl=rnd(40),
-  c=pick(smoke_colors)
- }
- add(encounter.smoke, s)
- return s
-end
-
-function update_smoke(s)
- if not s.active then
-  return
- end
- s.x += 2 - rnd(4)
- s.y += 2 - rnd(4)
- s.r += 2 - rnd(4)
- s.ttl -= 1
- if s.ttl <= 0 then
-  s.active = false
- end
-end
-
-function draw_smoke(s)
- if (s.active) then
-  circfill(s.x, s.y, s.r, s.c)
- end
-end
-
-function update_encounter_end()
- encounter.end_step += 1
- foreach(encounter.smoke, update_smoke)
- if encounter.end_step > 30 then
-  current_scene = scenes.overworld
- end
-end
-
-function draw_encounter_end()
- camera()
- draw_encounter_backdrop()
- draw_encounter_baddie()
- draw_baddie_speech('it got away!')
- foreach(encounter.smoke, draw_smoke)
- draw_encounter_hud()
-end
-
-function draw_baddie_speech(msg)
- local bw = 60
- local w = #msg * 1.5
- local x = bw - w
- rectfill(2, 7, 125, 27, 7)
- zspr(sprites.balloon, 1, 1, 72, 20, 2)
- print(msg, x, 16, 0)
-end
-
-function draw_encounter_splash()
- move_camera_with_player()
- local step = encounter.step + 16
- local cx = encounter.baddie.x+3
- local cy = encounter.baddie.y+13
- if step < 8 then
-  circ(cx,cy,step*3,8)	
- else
-  circ(cx,cy,(step-8)*3,7)	
- end
- draw_hud()
 end
 
 function init_encounter_escape()
- current_scene = scenes.encounter_escape
  encounter.escape_x = 32
  encounter.escape_y = 92
  encounter.escape_chance = challenge.escape_chance
+ pick_baddie_speech('escape')
+ current_scene = scenes.encounter_escape
 end
 
 function update_encounter_escape()
@@ -715,7 +600,7 @@ function draw_encounter_escape()
  camera()
  draw_encounter_backdrop()
  draw_encounter_baddie()
- draw_baddie_speech('gotcha!')
+ draw_baddie_speech()
  draw_encounter_hud()
  zspr(sprites.ball, 1, 1, encounter.escape_x, encounter.escape_y, 8)
 end
@@ -727,6 +612,7 @@ function init_encounter_free()
  for idx = 1,8+flr(rnd(16)) do
   make_encounter_smoke(64, 100)
  end
+ pick_baddie_speech('free')
 end
 
 function update_encounter_free()
@@ -741,10 +627,114 @@ end
 function draw_encounter_free()
  draw_encounter_backdrop()
  draw_encounter_baddie()
- draw_baddie_speech('escaped!')
+ draw_baddie_speech()
  draw_encounter_hud()
  zspr(sprites.ball, 1, 1, encounter.escape_x, encounter.escape_y, 8)
  foreach(encounter.smoke, draw_smoke)
+end
+
+function init_encounter_end()
+ ball.target = 0
+ encounter.end_step = 0
+ encounter.baddie.cr = 0
+ encounter.baddie.stun = challenge.encounter_stun
+ encounter.smoke = {}
+ for idx = 1,3+flr(rnd(10)) do
+  make_encounter_smoke(60, 120)
+ end
+ frustrate_baddie(encounter.baddie, challenge.encounter_end_frustration)
+ pick_baddie_speech('theend')
+	current_scene = scenes.encounter_end
+end
+
+function update_encounter_end()
+ encounter.end_step += 1
+ foreach(encounter.smoke, update_smoke)
+ if encounter.end_step > 30 then
+  current_scene = scenes.overworld
+ end
+end
+
+function draw_encounter_end()
+ camera()
+ draw_encounter_backdrop()
+ draw_encounter_baddie()
+ draw_baddie_speech()
+ foreach(encounter.smoke, draw_smoke)
+ draw_encounter_hud()
+end
+
+function make_encounter_smoke(bx, by)
+ local s = {
+  x=bx  + (5-rnd(10)),
+  y=by - rnd(5),
+  r=rnd(15),
+  active=true,
+  ttl=rnd(40),
+  c=pick(smoke_colors)
+ }
+ add(encounter.smoke, s)
+ return s
+end
+
+function update_smoke(s)
+ if not s.active then
+  return
+ end
+ s.x += 2 - rnd(4)
+ s.y += 2 - rnd(4)
+ s.r += 2 - rnd(4)
+ s.ttl -= 1
+ if s.ttl <= 0 then
+  s.active = false
+ end
+end
+
+function draw_smoke(s)
+ if (s.active) then
+  circfill(s.x, s.y, s.r, s.c)
+ end
+end
+
+function draw_baddie_speech()
+ rectfill(2, 7, 125, 27, 7)
+ zspr(sprites.balloon, 1, 1, 72, 20, 2)
+ print(encounter.baddie_speech, 6, 12, 0)
+end
+
+function draw_encounter_splash()
+ move_camera_with_player()
+ local step = encounter.step + 16
+ local cx = encounter.baddie.x+3
+ local cy = encounter.baddie.y+13
+ if step < 8 then
+  circ(cx,cy,step*3,8)	
+ else
+  circ(cx,cy,(step-8)*3,7)	
+ end
+ draw_hud()
+end
+
+function draw_encounter_hud_balls()
+ local nb = encounter.baddie.balls
+ local bx = 56 - (5 * nb)
+ local by = 44
+ for idx=1,nb do
+  spr(sprites.ball, bx + (10 * idx), by)
+ end
+end
+
+function draw_encounter_hud()
+ draw_hud()
+ draw_encounter_hud_balls()
+end
+
+function pick_baddie_speech(kind)
+ levels = speech[kind]
+ msgs = levels[flr((encounter.baddie.frustration/100) * count(levels)) + 1]
+ if msgs then
+  encounter.baddie_speech = pick(msgs)
+ end
 end
 
 game_over = {step=0}
@@ -764,8 +754,7 @@ end
 
 function draw_game_over()
  cls()
- print('you were caught. rest awhile, then x to try again', 1, 1)
- zspr(sprites.ball, 1, 1, 32, 32, 8)
+ print('you were caught. \nrest awhile, then x to try again', 1, 1)
 end
 
 title_screen = {step=0}
@@ -810,6 +799,35 @@ function draw_game_won()
  zspr(sprites.ball, 1, 1, 32, 32, 8)
 end
 
+function baddie_in_range(t,x,y)
+ if t.stun > 0 then
+ 	return false
+ end
+ dist = (x - (t.x + 3))^2 + 
+        (y - (t.y + 13))^2
+ range = t.cr^2
+ return (dist - range) < 7
+end
+
+function hurt_player(amt)
+ player.health -= amt
+	player.hurt = 25
+ if player.health <= 0 then
+  player.health = 0
+  init_game_over()
+ end
+end
+
+function frustrate_baddie(t, amt)
+ t.frustration += amt * t.frustration_factor
+ t.frustration_anim_steps = 30
+ if t.frustration >= 100 then
+  t.frustration = 100
+  t.quitting = true
+  t.quitting_steps = quitting_steps_start
+ end
+end
+
 function find_tile_under(x,y)
  return mget((x+4)/8,(y+8)/8)
 end
@@ -836,6 +854,74 @@ end
 function round10(num)
  return ((num>0) and flr(num * 100) or -flr(-num * 100)) / 100
 end
+
+speech = {
+ start={
+  {"i haven't seen you before!",
+   "interesting, a new critter!",
+   "wow, you're adorable!",
+   "so cute! can i keep it?"},
+  {"another chance to catch you!",
+   "let's try this again."},
+  {"this one is hard to catch.",
+   "you're slippery!"},
+  {"ugh, you again."},
+  {"this #$%^ thing is impossible!"}
+ },
+ outofballs={
+  {"i need something to throw",
+   "i should collect items"},
+  {"guess i ran out of balls",
+   "where are my balls?"},
+  {"caught me empty handed!",
+   "did you know i was out?"},
+  {"now you're just taunting me!",
+   "ugh, go away."},
+  {"this game is rigged!",
+   "pay to win garbage"}
+ },
+ throw={
+  {"am i doing this right?",
+   "how about this angle?",
+   "do i throw it like this?"},
+  {"practice makes perfect!",
+   "i think i might be improving!",
+   "wow, nice moves!"},
+  {"playing hard to get?",
+   "should it move like that?",
+   "okay, now that's not fair!"},
+  {"take this!",
+   "get in the ball!",
+   "stop moving so i can hit you!",
+   "stop cheating!"},
+  {"nobody can hit this thing!",
+   "omg hax!",
+   "@#$%^&*! @#$%^&*! @#$%^&*!"}
+ },
+ escape={
+  {"i hope it stays in there!"},
+  {"maybe it'll stay this time?"},
+  {"c'mon c'mon c'mon \ndon't bust out!"},
+  {"that's right! \nyou stay in there!"},
+  {"stay in there, you #$%^er"}
+ },
+ free={
+  {"oh no, it got out?"},
+  {"guess i'll just keep trying!"},
+  {"escaped again?!"},
+  {"is there some trick to this?"},
+  {"$%^&! it broke out!"}
+ },
+ theend={
+  {"oh well, maybe next time."},
+  {"crud, it got away!"},
+  {"get back here!"},
+  {"didn't want it anyway."},
+  {"@#$% this game!",
+   "this game is boring anyway",
+   "game over, man!"}
+ }
+}
 
 __gfx__
 00000000bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
