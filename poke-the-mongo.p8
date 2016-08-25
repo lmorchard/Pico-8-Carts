@@ -15,6 +15,8 @@ __lua__
 --   lure module
 -- better map
 -- grass rustling?
+-- baddies with frustration < 25% can spawn new baddies via recommendation
+-- random pauses in dodge ball throws, so player can fire off abilities
 
 scenes = {
  overworld=1,
@@ -33,15 +35,15 @@ current_scene = scenes.title_screen
 challenge = {
  encounter_hurt=3,
  escape_hurt_per_tick=0.2,
- dodge_hurt=-1,
- bounce_hurt=-10,
+ dodge_hurt=-2,
+ bounce_hurt=-5,
  escape_chance=0.05,
  encounter_stun=60,
- no_balls_frustration=20,
+ no_balls_frustration=10,
  escape_frustration=10,
  encounter_end_frustration=5,
- dodge_frustration=5,
- bounce_frustration=15
+ dodge_frustration=10,
+ bounce_frustration=20
 }
 
 map_x_max = 128 * 8
@@ -454,6 +456,16 @@ function update_encounter_player()
  if btn(2) then player.dodgev = 1
  elseif btn(3) then player.dodgev = 3
  else player.dodgev = 2 end
+
+ if not ball.bouncing and ball.target == 2 and btn(2) then
+  if ball.pos > 80 and ball.pos < 95 then
+   -- Tap up exactly when the ball is 80-95% down the middle, it will bounce!
+   bounce_ball()
+  elseif ball.pos > 50 and ball.pos < 80 then
+   -- But, tap up too early, and you get captured.
+   init_encounter_escape()
+  end
+ end
 end
 
 function draw_encounter_player()
@@ -476,6 +488,7 @@ function throw_ball()
  else
   encounter.baddie.balls -= 1
   ball.pos = 0
+  ball.bouncing = false
   ball.target = flr(rnd(3)) + 1
   ball.throw = pick(ball_throws[ball.target])
   pick_baddie_speech('throw')
@@ -483,38 +496,66 @@ function throw_ball()
 end
 
 function update_ball()
- ball.pos = ball.pos + 3
- if ball.pos >= 100 then
-  if not resolve_ball() then
-   throw_ball()
+ if ball.bouncing then
+  ball.bouncing_step -= 3
+  if ball.bouncing_step <= 0 then
+   resolve_ball()
+  end
+ else
+  ball.pos += 3
+  if ball.pos >= 100 then
+   resolve_ball()
   end
  end
 end
 
+function bounce_ball()
+ ball.bouncing = true
+ ball.bouncing_step = 85
+ ball.bouncing_dir = flr(rnd(3))
+ hurt_player(challenge.bounce_hurt)
+ frustrate_baddie(encounter.baddie, challenge.bounce_frustration)
+end
+
 function resolve_ball()
- if ball.target == 1 and player.dodgeh != 3 then
+ if ball.bouncing and ball.bouncing_step <= 0 then
+  ball_dodged()
+ elseif ball.target == 1 and player.dodgeh != 3 then
   init_encounter_escape()
-  return true
  elseif ball.target == 2 and player.dodgev != 3 then
   init_encounter_escape()
-  return true
  elseif ball.target == 3 and player.dodgeh != 1 then
   init_encounter_escape()
-  return true
  else
-  frustrate_baddie(encounter.baddie, challenge.dodge_frustration)
-  hurt_player(challenge.dodge_hurt)
-  return false
+  ball_dodged()
  end
 end
 
+function ball_dodged()
+ frustrate_baddie(encounter.baddie, challenge.dodge_frustration)
+ hurt_player(challenge.dodge_hurt)
+ throw_ball()
+end
+
 function draw_ball()
- local perc = ball.pos/100
+ local perc
+ if ball.bouncing then
+  perc = ball.bouncing_step/100 
+ else
+  perc = ball.pos/100
+ end
+
  local bx = 66 - sin(0.5 * perc*0.25) * 28
  local by = 50 + (sin(0.125 + (perc*0.5)) - sin(0.125)) * 66
  local bz = sin(0.5 * perc*0.25) * 8
  
-	if ball.throw == 0 then
+ if ball.bouncing then
+  if ball.bouncing_dir <= 1 then
+   bx += (sin(0.25 + perc*0.25)) * 48
+  else
+   bx += (sin(0.75 + perc*0.25)) * 48
+  end
+ elseif ball.throw == 0 then
   -- straight middle
 	elseif ball.throw == 1 then
   -- curve left to middle
@@ -542,7 +583,8 @@ end
 function draw_encounter_baddie()
  t = encounter.baddie
 
- local df = 8 * (t.frustration / 100)
+ -- Baddies shake with frustration!
+ local df = 12 * (t.frustration / 100)
  local bx = 56
  local by = 30
  if t.frustration_anim_steps > 0 then
@@ -796,7 +838,6 @@ end
 function draw_game_won()
  cls()
  print('you won! this screen sucks!', 1, 1)
- zspr(sprites.ball, 1, 1, 32, 32, 8)
 end
 
 function baddie_in_range(t,x,y)
@@ -815,6 +856,8 @@ function hurt_player(amt)
  if player.health <= 0 then
   player.health = 0
   init_game_over()
+ elseif player.health > 100 then
+  player.health = 100
  end
 end
 
