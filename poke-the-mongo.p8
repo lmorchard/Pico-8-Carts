@@ -1,7 +1,7 @@
 pico-8 cartridge // http://www.pico-8.com
 version 8
 __lua__
--- poke the mongo, v0.3
+-- poke the mongo, v0.4
 -- <me@lmorchard.com>
 
 -- todos:
@@ -9,14 +9,17 @@ __lua__
 -- music
 -- better baddie placement
 -- better baddie ai with chase mode if detected
--- disruptive power ups 
---   gps scramble, 
+-- disruptive power ups
+--   gps scramble,
 --   server ddos,
 --   lure module
 -- better map
 -- grass rustling?
 -- baddies with frustration < 25% can spawn new baddies via recommendation
 -- random pauses in dodge ball throws, so player can fire off abilities
+-- p*kestops
+--   attract players, they gravitate toward them when out of balls
+--   can spawn a lure module, spawns a bunch of temporary short-lived baddies
 
 scenes = {
  overworld=1,
@@ -105,8 +108,10 @@ quitting_colors = {0,5,13,6,7}
 quitting_replace_colors = {1,2,4,9,8,10,12,15}
 
 function _init()
-	reset_player()
+ reset_player()
  init_baddies()
+ // current_scene = scenes.title_screen
+ current_scene = scenes.overworld
 end
 
 function _update()
@@ -120,13 +125,13 @@ function _update()
  	update_encounter_end()
  elseif current_scene == scenes.encounter_escape then
  	update_encounter_escape()
- elseif current_scene == scenes.encounter_free then 
+ elseif current_scene == scenes.encounter_free then
  	update_encounter_free()
- elseif current_scene == scenes.game_over then 
+ elseif current_scene == scenes.game_over then
  	update_game_over()
- elseif current_scene == scenes.title_screen then 
+ elseif current_scene == scenes.title_screen then
  	update_title_screen()
- elseif current_scene == scenes.game_won then 
+ elseif current_scene == scenes.game_won then
  	update_game_won()
  end
 end
@@ -142,13 +147,13 @@ function _draw()
  	draw_encounter_end()
  elseif current_scene == scenes.encounter_escape then
  	draw_encounter_escape()
- elseif current_scene == scenes.encounter_free then 
+ elseif current_scene == scenes.encounter_free then
  	draw_encounter_free()
- elseif current_scene == scenes.game_over then 
+ elseif current_scene == scenes.game_over then
  	draw_game_over()
- elseif current_scene == scenes.title_screen then 
+ elseif current_scene == scenes.title_screen then
  	draw_title_screen()
- elseif current_scene == scenes.game_won then 
+ elseif current_scene == scenes.game_won then
  	draw_game_won()
  end
 end
@@ -194,14 +199,14 @@ function make_baddie(x,y)
   frustration_anim_steps=0,
   quitting=false,
   quitting_steps=0
- } 
- 
+ }
+
  for l = 1,count(baddie_layers) do
  	add(t.sprites, pick(baddie_layers[l]))
  end
 
  t.frustration_factor = frustration_factors['s' .. t.sprites[1]]
- 
+
  add(baddies, t)
  return t
 end
@@ -218,37 +223,37 @@ function update_baddie(t)
   end
   return
  end
- 
+
  t.x = min(128, max(0, t.x + t.dx*t.spd))
  t.y = min(128, max(0, t.y + t.dy*t.spd))
 
  update_baddie_scan(t)
- 
+
  if not can_go(t.x,t.y) then
  	t.x = ox
  	t.y = oy
  end
- 
+
  t.ttm -= 1
  if t.ttm < 1 then
  	t.ttm = rnd(30) + 90
- 	
+
  	local options = {}
  	for idx = 1,4 do
    if fget(find_tile_under(t.x,t.y), tiledirections[idx]) then
    	add(options, directions[idx])
 			end
  	end
- 	
+
 	 local d = pick(options)
 		if d then
 		 t.dx = d[1]
 		 t.dy = d[2]
-	 end 	
+	 end
  end
 end
 
-function draw_baddie(t) 
+function draw_baddie(t)
  if t.quitting then
   local perc = t.quitting_steps / quitting_steps_start
   local clr = quitting_colors[flr(count(quitting_colors) * perc) + 1]
@@ -273,14 +278,14 @@ function update_baddie_scan(t)
 	end
 end
 
-function draw_baddie_scan(t) 
+function draw_baddie_scan(t)
  if t.quitting then
   return
  end
 
  local cx = t.x+3
  local cy = t.y+13
- 
+
  if t.stun > 0 then
   local clr = stun_colors[flr(1+((t.stun/6)%count(stun_colors)))]
   circ(cx,cy,5,clr)
@@ -293,7 +298,7 @@ end
 function update_player()
 	local opx = player.x
 	local opy = player.y
- 
+
  if btn(0) then
   player.dx = -1
   player.facing = false
@@ -301,10 +306,10 @@ function update_player()
   player.dx = 1
   player.facing = true
  end
- 
- if btn(2) then 
+
+ if btn(2) then
   player.dy = -1
- elseif btn(3) then 
+ elseif btn(3) then
   player.dy = 1
  end
 
@@ -320,12 +325,12 @@ function update_player()
 
  player.x = max(0, min(map_x_max, player.x + player.dx))
  player.y = max(0, min(map_y_max, player.y + player.dy))
-	
+
  if not can_go(player.x,player.y) then
  	player.x = opx
  	player.y = opy
  end
- 
+
  for idx = 1,count(baddies) do
   baddie = baddies[idx]
  	if baddie_in_range(baddie, player.x+4, player.y+4) then
@@ -333,7 +338,7 @@ function update_player()
  	 break
  	end
  end
-  
+
 end
 
 function draw_player()
@@ -365,10 +370,45 @@ function draw_hud_health()
  if player.hurt > 0 then
  	player.hurt -= 1
  	clr = hurt_colors[flr(rnd(count(hurt_colors))+1)]
-	else 	
+	else
 	 clr = hurt_colors[1]
  end
  rectfill(2,2,125*(player.health/100),3,clr)
+end
+
+cloud_colors = {7, 6, 13, 5, 1, 0}
+
+game_rnd_seed = rnd(100000)
+sky_rnd_seed = rnd(100)
+
+function draw_clouds()
+ camera()
+
+ cam_x = min(895, max(0, player.x-64) / 7)
+ cam_y = min(127, max(0, player.y-64) / 7)
+ camera(cam_x, cam_y)
+
+ game_rnd_seed = rnd(100000)
+ srand(sky_rnd_seed)
+
+ for x=1,128,4 do
+  for y=1,128,4 do
+   if (rnd(100) < 2) then
+    local width = 5 + rnd(15)
+
+    line(x+2, y,   x+width,   y,   6)
+    line(x+1, y+1, x+width+1, y+1, 6)
+    line(x+3, y+2, x+width-1, y+2, 6)
+
+    line(x+2, y-2, x+width-2, y-2, 7)
+    line(x+1, y-1, x+width-1, y-1, 7)
+    line(x,   y,   x+width,   y,   7)
+    line(x+2, y+1, x+width-2, y+1, 7)
+   end
+  end
+ end
+
+ srand(game_rnd_seed)
 end
 
 function update_overworld()
@@ -382,10 +422,11 @@ end
 function draw_overworld()
  cls()
  move_camera_with_player()
-	draw_map()
+ draw_map()
  foreach(baddies, draw_baddie_scan)
  foreach(baddies, draw_baddie)
- draw_player() 
+ draw_player()
+ draw_clouds()
  draw_hud()
 end
 
@@ -452,7 +493,7 @@ function update_encounter_player()
  if btn(0) then player.dodgeh = 1
  elseif btn(1) then player.dodgeh = 3
  else	player.dodgeh = 2 end
- 
+
  if btn(2) then player.dodgev = 1
  elseif btn(3) then player.dodgev = 3
  else player.dodgev = 2 end
@@ -470,7 +511,7 @@ end
 
 function draw_encounter_player()
  zspr(sprites.player,
- 			  1, 1, 
+ 			  1, 1,
       dodgex_pos[player.dodgeh],
       dodgey_pos[player.dodgev],
       8)
@@ -540,7 +581,7 @@ end
 function draw_ball()
  local perc
  if ball.bouncing then
-  perc = ball.bouncing_step/100 
+  perc = ball.bouncing_step/100
  else
   perc = ball.pos/100
  end
@@ -548,7 +589,7 @@ function draw_ball()
  local bx = 66 - sin(0.5 * perc*0.25) * 28
  local by = 50 + (sin(0.125 + (perc*0.5)) - sin(0.125)) * 66
  local bz = sin(0.5 * perc*0.25) * 8
- 
+
  if ball.bouncing then
   if ball.bouncing_dir <= 1 then
    bx += (sin(0.25 + perc*0.25)) * 48
@@ -576,7 +617,7 @@ function draw_ball()
   -- curve right to left
   bx += (sin(1-(perc*0.75))) * 56
  end
- 
+
  zspr(sprites.ball, 1, 1, bx, by, bz)
 end
 
@@ -592,7 +633,7 @@ function draw_encounter_baddie()
 
  	bx += (df/2) - rnd(df)
  	by += (df/2) - rnd(df)
- end 	
+ end
 
  for idx = 1,count(t.sprites) do
 		 zspr(t.sprites[idx], 1, 2, bx, by, 2)
@@ -628,7 +669,7 @@ function update_encounter_escape()
  elseif btn(3) then
   encounter.escape_y = 92 + rnd(8)
   escaping = true
- else 
+ else
   encounter.escape_y = 92
  end
 
@@ -750,9 +791,9 @@ function draw_encounter_splash()
  local cx = encounter.baddie.x+3
  local cy = encounter.baddie.y+13
  if step < 8 then
-  circ(cx,cy,step*3,8)	
+  circ(cx,cy,step*3,8)
  else
-  circ(cx,cy,(step-8)*3,7)	
+  circ(cx,cy,(step-8)*3,7)
  end
  draw_hud()
 end
@@ -789,8 +830,7 @@ end
 function update_game_over()
  game_over.step += 1
  if btn(5) or btn(4) then
-  reset_player()
-  current_scene = scenes.overworld
+  _init()
  end
 end
 
@@ -830,8 +870,7 @@ end
 function update_game_won()
  game_won.step += 1
  if btn(5) or btn(4) then
-  reset_player()
-  current_scene = scenes.title_screen
+  _init()
  end
 end
 
@@ -844,7 +883,7 @@ function baddie_in_range(t,x,y)
  if t.stun > 0 then
  	return false
  end
- dist = (x - (t.x + 3))^2 + 
+ dist = (x - (t.x + 3))^2 +
         (y - (t.y + 13))^2
  range = t.cr^2
  return (dist - range) < 7
@@ -1261,4 +1300,3 @@ __music__
 00 41424344
 00 41424344
 00 41424344
-
