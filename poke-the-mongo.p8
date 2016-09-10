@@ -41,10 +41,10 @@ current_scene = scenes.title_screen
 challenge = {
  min_baddies=7,
  max_baddies=15,
- encounter_hurt=3,
- escape_hurt_per_tick=0.2,
- dodge_hurt=-2,
- bounce_hurt=-5,
+ encounter_hurt=2,
+ escape_hurt_per_tick=0.1,
+ dodge_hurt=-5,
+ bounce_hurt=-10,
  escape_chance=0.05,
  encounter_stun=60,
  no_balls_frustration=10,
@@ -454,9 +454,9 @@ end
 function update_clouds()
  cloud_layers = (player.health / 100) * (cloud_max_layers+1)
  cloud_wind = (player.health / 100) * 1.75
- cloud_target_num = player.health * 3
+ cloud_target_num = player.health * 2
  if lightning.active then
-  cloud_target_num *= 2
+  cloud_target_num *= 1.5
  end
  if count(clouds) < cloud_target_num then
   place_cloud()
