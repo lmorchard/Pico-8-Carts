@@ -33,9 +33,14 @@ scenes = {
  game_won=9
 }
 
+overworld_map_max_x = 21 * 8
+overworld_map_max_y = 11 * 8
+
 current_scene = scenes.title_screen
 
 challenge = {
+ min_baddies=7,
+ max_baddies=15,
  encounter_hurt=3,
  escape_hurt_per_tick=0.2,
  dodge_hurt=-2,
@@ -46,7 +51,11 @@ challenge = {
  escape_frustration=10,
  encounter_end_frustration=5,
  dodge_frustration=10,
- bounce_frustration=20
+ bounce_frustration=20,
+ lightning_health_min=80,
+ lightning_max_duration=7*30,
+ lightning_health_cost=50/(7*30),
+ lightning_frustration=50/(7*30)
 }
 
 map_x_max = 128 * 8
@@ -110,6 +119,7 @@ quitting_replace_colors = {1,2,4,9,8,10,12,15}
 function _init()
  reset_player()
  init_baddies()
+ init_clouds()
  // current_scene = scenes.title_screen
  current_scene = scenes.overworld
 end
@@ -168,7 +178,7 @@ function reset_player()
   sprite_idx=0,
   moving=0,
   facing=false,
- 	health=75,
+ 	health=50,
   hurt=0,
  	dodgeh=2,
   dodgev=2
@@ -176,13 +186,15 @@ function reset_player()
 end
 
 function init_baddies()
- make_baddie(12, 12)
- make_baddie(24, 12)
- make_baddie(36, 12)
- make_baddie(48, 12)
- make_baddie(12, 24)
- make_baddie(12, 36)
- make_baddie(12, 48)
+ place_baddies()
+end
+
+function place_baddies()
+ local num_baddies = challenge.min_baddies + flr(rnd(challenge.max_baddies - challenge.min_baddies))
+ for idx = 1,num_baddies do
+  local coords = pick_passable_tile()
+  make_baddie(coords[1], coords[2])
+ end
 end
 
 function make_baddie(x,y)
@@ -224,12 +236,16 @@ function update_baddie(t)
   return
  end
 
+ if lightning.active then
+  frustrate_baddie(t, challenge.lightning_frustration)
+ end
+
  t.x = min(128, max(0, t.x + t.dx*t.spd))
  t.y = min(128, max(0, t.y + t.dy*t.spd))
 
  update_baddie_scan(t)
 
- if not can_go(t.x,t.y) then
+ if not passable_tile_at(t.x,t.y) then
  	t.x = ox
  	t.y = oy
  end
@@ -262,7 +278,7 @@ function draw_baddie(t)
   end
  end
  for idx = 1,count(t.sprites) do
-   spr(t.sprites[idx], t.x, t.y, 1, 2, false, false)
+   spr(t.sprites[idx], t.x - 3, t.y - 15, 1, 2, false, false)
  end
  if t.quitting then
   pal()
@@ -283,8 +299,8 @@ function draw_baddie_scan(t)
   return
  end
 
- local cx = t.x+3
- local cy = t.y+13
+ local cx = t.x
+ local cy = t.y
 
  if t.stun > 0 then
   local clr = stun_colors[flr(1+((t.stun/6)%count(stun_colors)))]
@@ -293,6 +309,15 @@ function draw_baddie_scan(t)
   local clr = (t.cr < 9) and 5 or 7
   circ(cx,cy,t.cr,clr)
  end
+end
+
+lightning = {
+ active=false,
+ duration=0
+}
+
+function cause_lightning_stun(b)
+  b.stun = challenge.encounter_stun / 2
 end
 
 function update_player()
@@ -313,6 +338,18 @@ function update_player()
   player.dy = 1
  end
 
+ if lightning.active then
+  lightning.duration -= 1
+  hurt_player(challenge.lightning_health_cost)
+  if lightning.duration <= 0 then
+   lightning.active = false
+   foreach(baddies, cause_lightning_stun)
+  end
+ elseif player.health > challenge.lightning_health_min and btn(4) then
+  lightning.duration = challenge.lightning_max_duration
+  lightning.active = true
+ end
+
  if player.dx < 0 then player.dx += player.dfriction end
  if player.dx > 0 then player.dx -= player.dfriction end
  player.dx = round10(player.dx)
@@ -326,25 +363,24 @@ function update_player()
  player.x = max(0, min(map_x_max, player.x + player.dx))
  player.y = max(0, min(map_y_max, player.y + player.dy))
 
- if not can_go(player.x,player.y) then
+ if not passable_tile_at(player.x,player.y) then
  	player.x = opx
  	player.y = opy
  end
 
  for idx = 1,count(baddies) do
   baddie = baddies[idx]
- 	if baddie_in_range(baddie, player.x+4, player.y+4) then
+ 	if baddie_in_range(baddie, player.x, player.y) then
  	 init_encounter_start(baddie)
  	 break
  	end
  end
-
 end
 
 function draw_player()
  player.sprite_idx = (player.sprite_idx + player.moving) % 3
  spr(sprites.player + flr(player.sprite_idx),
-     player.x, player.y,
+     player.x - 3, player.y - 7,
      1, 1,
      player.facing, false)
 end
@@ -376,39 +412,124 @@ function draw_hud_health()
  rectfill(2,2,125*(player.health/100),3,clr)
 end
 
-cloud_colors = {7, 6, 13, 5, 1, 0}
+function init_clouds()
+ cloud_target_num = 75 * 2
+ cloud_max_x = 256
+ cloud_max_y = 256
+ cloud_max_layers = 4
+ cloud_colors = {7, 6, 13, 5, 1, 0}
+ cloud_parallax = 2
+ cloud_wind = 1
+ cloud_layers = 2
 
-game_rnd_seed = rnd(100000)
-sky_rnd_seed = rnd(100)
+ clouds = {}
+
+ for i=1,cloud_target_num do
+  place_cloud()
+ end
+end
+
+function make_cloud(x,y,w,d,layers)
+ local c = {
+  x=x,
+  y=y,
+  w=w,
+  d=d,
+  layers=layers
+ }
+ add(clouds, c)
+ return c
+end
+
+function place_cloud()
+ make_cloud(
+  flr(rnd(cloud_max_x)),
+  flr(rnd(cloud_max_y)),
+  flr(rnd(10))+5,
+  rnd(0.3),
+  1 + (player.health / 100) * (cloud_max_layers - 1)
+ )
+end
+
+function update_clouds()
+ cloud_layers = (player.health / 100) * (cloud_max_layers+1)
+ cloud_wind = (player.health / 100) * 1.75
+ cloud_target_num = player.health * 3
+ if lightning.active then
+  cloud_target_num *= 2
+ end
+ if count(clouds) < cloud_target_num then
+  place_cloud()
+ end
+ foreach(clouds, update_cloud)
+end
+
+function update_cloud(c)
+ c.x += (cloud_wind * c.d)
+ if c.x > (cloud_max_x + c.w) then
+  if count(clouds) > cloud_target_num then
+   del(clouds, c)
+  else
+   c.x = 0 - c.w
+  end
+ end
+end
 
 function draw_clouds()
  camera()
 
- cam_x = min(895, max(0, player.x-64) / 7)
- cam_y = min(127, max(0, player.y-64) / 7)
+ cam_x = min(256, max(0, player.x-64) * cloud_parallax)
+ cam_y = min(256, max(0, player.y-64) * cloud_parallax)
  camera(cam_x, cam_y)
 
- game_rnd_seed = rnd(100000)
- srand(sky_rnd_seed)
+ foreach(clouds, draw_cloud)
+end
 
- for x=1,128,4 do
-  for y=1,128,4 do
-   if (rnd(100) < 2) then
-    local width = 5 + rnd(15)
+function draw_cloud(c)
+ pal()
 
-    line(x+2, y,   x+width,   y,   6)
-    line(x+1, y+1, x+width+1, y+1, 6)
-    line(x+3, y+2, x+width-1, y+2, 6)
-
-    line(x+2, y-2, x+width-2, y-2, 7)
-    line(x+1, y-1, x+width-1, y-1, 7)
-    line(x,   y,   x+width,   y,   7)
-    line(x+2, y+1, x+width-2, y+1, 7)
-   end
-  end
+ if lightning.active and rnd(1) < .1 then
+  pal(7, 12)
+  pal(6, 10)
+  pal(5, 13)
+  pal(13, 14)
  end
 
- srand(game_rnd_seed)
+ local x = c.x
+ local y = c.y
+ local w = c.w
+ local layers = cloud_layers
+
+ if layers >= 1 then
+  line(x+2, y-2, x+w-2, y-2, 7)
+  line(x+1, y-1, x+w-1, y-1, 7)
+  line(x,   y,   x+w,   y,   7)
+  line(x+2, y+1, x+w-2, y+1, 7)
+ end
+
+ if layers >= 2 then
+  line(x+2, y,   x+w,   y,   6)
+  line(x+1, y+1, x+w+1, y+1, 6)
+  line(x+3, y+2, x+w-1, y+2, 6)
+ end
+
+ if layers >= 3 then
+  line(x+1, y-3, x+w-3, y-3, 13)
+  line(x+0, y-2, x+w-2, y-2, 13)
+  line(x-1, y-1, x+w-1, y-1, 13)
+  line(x+1, y,   x+w-3, y,   13)
+ end
+
+ if layers >= 4 then
+  line(x+1, y-4, x+w*2-3, y-4, 5)
+  line(x+0, y-3, x+w*2-2, y-3, 5)
+  line(x-1, y-2, x+w*2-1, y-2, 5)
+  line(x+1, y-1, x+w*2-3, y-1, 5)
+  line(x+1, y-0, x+w*2-3, y-0, 5)
+  line(x+3, y+1, x+w*2-5, y+1, 5)
+ end
+
+ pal()
 end
 
 function update_overworld()
@@ -417,12 +538,14 @@ function update_overworld()
  if count(baddies) == 0 then
   init_game_won()
  end
+ update_clouds()
 end
 
 function draw_overworld()
  cls()
  move_camera_with_player()
  draw_map()
+
  foreach(baddies, draw_baddie_scan)
  foreach(baddies, draw_baddie)
  draw_player()
@@ -499,10 +622,10 @@ function update_encounter_player()
  else player.dodgev = 2 end
 
  if not ball.bouncing and ball.target == 2 and btn(2) then
-  if ball.pos > 80 and ball.pos < 95 then
-   -- Tap up exactly when the ball is 80-95% down the middle, it will bounce!
+  if ball.pos > 75 and ball.pos < 95 then
+   -- Tap up exactly when the ball is 75-95% down the middle, it will bounce!
    bounce_ball()
-  elseif ball.pos > 50 and ball.pos < 80 then
+  elseif ball.pos > 50 and ball.pos < 65 then
    -- But, tap up too early, and you get captured.
    init_encounter_escape()
   end
@@ -788,8 +911,8 @@ end
 function draw_encounter_splash()
  move_camera_with_player()
  local step = encounter.step + 16
- local cx = encounter.baddie.x+3
- local cy = encounter.baddie.y+13
+ local cx = encounter.baddie.x
+ local cy = encounter.baddie.y
  if step < 8 then
   circ(cx,cy,step*3,8)
  else
@@ -883,8 +1006,8 @@ function baddie_in_range(t,x,y)
  if t.stun > 0 then
  	return false
  end
- dist = (x - (t.x + 3))^2 +
-        (y - (t.y + 13))^2
+ dist = (x - t.x)^2 +
+        (y - t.y)^2
  range = t.cr^2
  return (dist - range) < 7
 end
@@ -911,11 +1034,21 @@ function frustrate_baddie(t, amt)
 end
 
 function find_tile_under(x,y)
- return mget((x+4)/8,(y+8)/8)
+ return mget(x/8,y/8)
 end
 
-function can_go(x, y)
+function passable_tile_at(x, y)
  return fget(find_tile_under(x,y),3)
+end
+
+function pick_passable_tile()
+ local x = 0
+ local y = 0
+ repeat
+  x = flr(rnd(overworld_map_max_x/8))*8
+  y = flr(rnd(overworld_map_max_y/8))*8
+ until passable_tile_at(x,y)
+ return {x,y}
 end
 
 -- http://pico-8.wikia.com/wiki/draw_zoomed_sprite_(zspr)
