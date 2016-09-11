@@ -7,15 +7,15 @@ __lua__
 -- todos:
 -- sound effects
 -- music
--- better baddie placement
+-- difficulty tuning & level select
+-- baddie location hud
 -- better baddie ai with chase mode if detected
 -- disruptive power ups
---   gps scramble,
 --   server ddos,
 --   lure module
--- better map
 -- grass rustling?
 -- baddies with frustration < 25% can spawn new baddies via recommendation
+-- lightning-based ability during encounters
 -- random pauses in dodge ball throws, so player can fire off abilities
 -- p*kestops
 --   attract players, they gravitate toward them when out of balls
@@ -438,6 +438,29 @@ function draw_hud_health()
  rectfill(2,2,125*(player.health/100),3,clr)
 end
 
+baddie_hud_radius = 16
+
+function draw_hud_baddies()
+ foreach(baddies, draw_one_hud_baddie)
+end
+
+function draw_one_hud_baddie(b)
+ local r = atan2(b.y - player.y, b.x - player.x)
+ local x = 0
+ local y = 0 - baddie_hud_radius
+ local rx = cos(r) * x - sin(r) * y
+ local ry = sin(r) * x - cos(r) * y
+ local color
+ if b.stun > 0 then
+  color = rnd(1) < 0.5 and 8 or 9
+ elseif b.quitting then
+  color = rnd(1) < 0.5 and 0 or 1
+ else
+  color = rnd(1) < 0.5 and 9 or 10
+ end
+ pset(rx + player.x, ry + player.y - 2, color)
+end
+
 function init_clouds()
  clouds = {}
  cloud_target_num = 150
@@ -601,6 +624,7 @@ function draw_overworld()
  foreach(baddies, draw_baddie_scan)
  foreach(baddies, draw_baddie)
  draw_player()
+ draw_hud_baddies()
  draw_clouds()
  draw_hud()
 end
@@ -983,7 +1007,8 @@ function draw_encounter_hud_balls()
 end
 
 function draw_encounter_hud()
- draw_hud()
+ camera()
+ draw_hud_health()
  draw_encounter_hud_balls()
 end
 
