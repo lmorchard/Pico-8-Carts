@@ -1,7 +1,7 @@
 pico-8 cartridge // http://www.pico-8.com
 version 8
 __lua__
--- poke the mongo, v0.4
+-- poke the mongo, v0.8
 -- <me@lmorchard.com>
 
 -- todos:
@@ -56,9 +56,12 @@ challenge = {
  dodge_frustration=10,
  bounce_frustration=20,
  lightning_health_min=80,
- lightning_max_duration=7*30,
- lightning_health_cost=75/(7*30),
- lightning_frustration=66/(7*30)
+ lightning_max_duration=3*30,
+ lightning_health_cost=75/(3*30),
+ lightning_frustration=20/(3*30),
+ candy_hurt=-10,
+ max_candy=3,
+ candy_spawn_chance=1
 }
 
 map_x_max = 128 * 8
@@ -87,7 +90,8 @@ sprites = {
  player=64,
 	ball=67,
  balloon=93,
- title=128
+ title=128,
+ candy=83
 }
 
 directions = {
@@ -132,6 +136,7 @@ clouds_wind_per_health = 2
 
 function _init()
  reset_player()
+ init_candy()
  init_baddies()
  init_clouds()
  current_scene = scenes.title_screen
@@ -253,6 +258,7 @@ function update_baddie(t)
 
  if lightning.active then
   frustrate_baddie(t, challenge.lightning_frustration)
+  cause_lightning_stun(t)
  end
 
  t.x = min(overworld_map_max_x, max(0, t.x + t.dx*t.spd))
@@ -402,7 +408,7 @@ end
 
 function draw_map()
  pal()
- if lightning.active then
+ if lightning.active and rnd(100) < 80 then
   pal(3, 1)
   pal(11, 3)
  end
@@ -493,7 +499,7 @@ function draw_cloud(c)
  local cloud_cam_x = cam_x * cloud_parallax
  local cloud_cam_y = cam_y * cloud_parallax
 
- -- Skip off-camera clouds
+ -- skip off-camera clouds
  if c.x < cloud_cam_x - c.w or
     c.x > cloud_cam_x + 128 or
     c.y < cloud_cam_y or
@@ -545,7 +551,39 @@ function draw_cloud(c)
  pal()
 end
 
+candy = {}
+
+function make_candy(x,y)
+ local c = { x=x, y=y, t=rnd(1), dt=0.03 }
+ add(candy, c)
+ return c
+end
+
+function init_candy()
+end
+
+function update_candy(c)
+ if count(candy) < challenge.max_candy and rnd(100) < challenge.candy_spawn_chance then
+  local coords = pick_passable_tile()
+  make_candy(coords[1]+4, coords[2]+4)
+ end
+ foreach(candy, update_one_candy)
+end
+
+function update_one_candy(c)
+ c.t = (c.t + c.dt) % 1
+ if distk(c.x, c.y, player.x, player.y) < (8/1000) then
+  hurt_player(challenge.candy_hurt)
+  del(candy, c)
+ end
+end
+
+function draw_candy(c)
+ spr(sprites.candy, c.x, c.y + (cos(c.t) * 1.5), 1, 1, false, false)
+end
+
 function update_overworld()
+ update_candy()
  foreach(baddies, update_baddie)
 	update_player()
  if count(baddies) == 0 then
@@ -559,6 +597,7 @@ function draw_overworld()
  move_camera_with_player()
  draw_map()
 
+ foreach(candy, draw_candy)
  foreach(baddies, draw_baddie_scan)
  foreach(baddies, draw_baddie)
  draw_player()
@@ -636,10 +675,10 @@ function update_encounter_player()
 
  if not ball.bouncing and ball.target == 2 and btn(2) then
   if ball.pos > 75 and ball.pos < 95 then
-   -- Tap up exactly when the ball is 75-95% down the middle, it will bounce!
+   -- tap up exactly when the ball is 75-95% down the middle, it will bounce!
    bounce_ball()
   elseif ball.pos > 50 and ball.pos < 65 then
-   -- But, tap up too early, and you get captured.
+   -- but, tap up too early, and you get captured.
    init_encounter_escape()
   end
  end
@@ -760,7 +799,7 @@ end
 function draw_encounter_baddie()
  t = encounter.baddie
 
- -- Baddies shake with frustration!
+ -- baddies shake with frustration!
  local df = 12 * (t.frustration / 100)
  local bx = 56
  local by = 30
@@ -1082,7 +1121,7 @@ function round10(num)
  return ((num>0) and flr(num * 100) or -flr(-num * 100)) / 100
 end
 
--- http://pico-8.wikia.com/wiki/Known_Bugs
+-- http://pico-8.wikia.com/wiki/known_bugs
 function distk(x0,y0,x1,y1)
  local dx=x0/1000-x1/1000
  local dy=y0/1000-y1/1000
