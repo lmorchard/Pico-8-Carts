@@ -140,6 +140,7 @@ function _init()
  init_baddies()
  init_clouds()
  current_scene = scenes.title_screen
+ -- current_scene = scenes.overworld
 end
 
 function _update()
@@ -438,7 +439,7 @@ function draw_hud_health()
  rectfill(2,2,125*(player.health/100),3,clr)
 end
 
-baddie_hud_radius = 16
+baddie_hud_radius = 12
 
 function draw_hud_baddies()
  foreach(baddies, draw_one_hud_baddie)
@@ -451,10 +452,10 @@ function draw_one_hud_baddie(b)
  local rx = cos(r) * x - sin(r) * y
  local ry = sin(r) * x - cos(r) * y
  local color
- if b.stun > 0 then
-  color = rnd(1) < 0.5 and 8 or 9
- elseif b.quitting then
+ if b.quitting then
   color = rnd(1) < 0.5 and 0 or 1
+ elseif b.stun > 0 then
+  color = rnd(1) < 0.5 and 8 or 9
  else
   color = rnd(1) < 0.5 and 9 or 10
  end
