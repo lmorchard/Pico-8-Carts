@@ -7,7 +7,9 @@ cx = width / 2
 cy = height / 2
 num_stars = 200
 warpz = 25
-z = 0.025 + (1/25 * 35)
+zstep = 1/25
+max_z = 7.999
+z = 0.025 + (zstep * 35)
 
 stars = {}
 
@@ -56,16 +58,27 @@ ct = 0
 
 function _update()
  ct = (ct + 1) % 100
+ 
+ if btn(5) then
+ 	z = min(max_z, z + zstep)
+	end
+	if btn(4) then
+	 z = max(0, z - zstep)
+	end 	
+ 
 	foreach(stars, update_star)
 	if count(stars) < num_stars then
 		make_star()
 	end	
 end
 
-function print_center(s)
+function print_center(y, s)
 	local x = 64 - #s*4 / 2
-	local y = 64 - 3
 	local off = 1
+
+ -- space is so exciting!!!!
+ x += rnd(z)
+ y += rnd(z)
 	
 	for _x=-off*2,off*2 do
   for _y=-off*2,off*2 do
@@ -85,7 +98,12 @@ end
 function _draw()
  cls()
 	foreach(stars, draw_star)
-	print_center('wanna go to space!!!')
+	print_center(61, 'wanna go to space!!!')
+ if z >= 1 then
+	 print_center(116, 'warp factor ' .. ((z / max_z) * 9.999))
+	else 
+	 print_center(116, 'impulse drive at ' .. (100 * z) .. '%')
+	end
 end
 __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
