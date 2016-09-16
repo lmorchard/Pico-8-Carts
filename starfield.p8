@@ -14,26 +14,26 @@ z = 0.025 + (zstep * 2)
 stars = {}
 
 function make_star()
-	local s = {
-		x=(rnd(width) - (width/2)) * warpz,
-		y=(rnd(height) - (height/2)) * warpz,
-		z=warpz,
-		px=0, py=0, xx=0, yy=0
-	}
-	add(stars, s)
-	return s
+ local s = {
+  x=(rnd(width) - (width/2)) * warpz,
+  y=(rnd(height) - (height/2)) * warpz,
+  z=warpz,
+  px=0, py=0, xx=0, yy=0
+ }
+ add(stars, s)
+ return s
 end
 
 function update_star(s)
-	s.px = s.xx
-	s.py = s.yy
+ s.px = s.xx
+ s.py = s.yy
  s.xx = s.x / s.z
  s.yy = s.y / s.z
-	s.z -= z
-	if s.z < z or s.px > width or s.py > height then
-	 del(stars, s)
-	 make_star()
-	end
+ s.z -= z
+ if s.z < z or s.px > width or s.py > height then
+  del(stars, s)
+  make_star()
+ end
 end
 
 star_colors = { 0, 1, 2, 5, 13, 12, 6, 15, 7, 7, 7 }
@@ -43,9 +43,9 @@ function draw_star(s)
  if s.px == 0 then return end
  local ic = 1 + flr(nc * cos(-(s.z/warpz)*0.25))
  line(s.xx + cx, s.yy + cy,
- 				 s.px + cx, s.py + cy, star_colors[ic + 1])
- pset(s.xx + cx, s.yy + cy,	star_colors[ic + 2])
- pset(s.px + cx, s.py + cy,	star_colors[ic])
+      s.px + cx, s.py + cy, star_colors[ic + 1])
+ pset(s.xx + cx, s.yy + cy, star_colors[ic + 2])
+ pset(s.px + cx, s.py + cy, star_colors[ic])
 end
 
 planet_colors = {
@@ -54,9 +54,9 @@ planet_colors = {
 
 function _init()
  l = 0 -- left pos of globe
-	for i=1,num_stars/3 do
-		make_star()
-	end
+ for i=1,num_stars/3 do
+  make_star()
+ end
  generate_planet()
 end
 
@@ -106,45 +106,45 @@ ct = 0
 
 function _update()
  ct = (ct + 1) % 100
- l = (l-0.25)%128
+ l = (l+0.25)%128
  
  if btn(5) then
- 	z = min(max_z, z + zstep)
-	end
-	if btn(4) then
-	 z = max(0, z - zstep)
-	end 	
+  z = min(max_z, z + zstep)
+ end
+ if btn(4) then
+  z = max(0, z - zstep)
+ end  
  if btnp(2) then
   generate_planet()
  end
  
-	foreach(stars, update_star)
-	if count(stars) < num_stars then
-		make_star()
-	end	
+ foreach(stars, update_star)
+ if count(stars) < num_stars then
+  make_star()
+ end 
 end
 
 function print_center(y, s)
-	local x = 64 - #s*4 / 2
-	local off = 1
+ local x = 64 - #s*4 / 2
+ local off = 1
 
  -- space is so exciting!!!!
  x += rnd(z)
  y += rnd(z)
-	
-	for _x=-off*2,off*2 do
+ 
+ for _x=-off*2,off*2 do
   for _y=-off*2,off*2 do
    print(s,x+_x,y+_y,1)
   end
  end
-	
-	for _x=-off,off do
+ 
+ for _x=-off,off do
   for _y=-off,off do
    print(s,x+_x,y+_y,2)
   end
  end
 
-	print(s, x, y, 6)
+ print(s, x, y, 6)
 end
 
 pi = 3.142
@@ -185,17 +185,17 @@ end
 
 function _draw()
  cls()
-	foreach(stars, draw_star)
+ foreach(stars, draw_star)
 
- globe(64, l, 64, 0)
+ globe(64, l, 64, -64)
  -- globe(32, l, 0, 0)
 
-	-- print_center(61, 'wanna go to space!!!')
+ -- print_center(61, 'wanna go to space!!!')
  if z >= 1 then
-	 print_center(116, 'warp factor ' .. ((z / max_z) * 9.999))
-	else 
-	 print_center(116, 'impulse drive at ' .. (100 * z) .. '%')
-	end
+  print_center(116, 'warp factor ' .. ((z / max_z) * 9.999))
+ else 
+  print_center(116, 'impulse drive at ' .. (100 * z) .. '%')
+ end
 end
 __gfx__
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
