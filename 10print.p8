@@ -2,7 +2,7 @@ pico-8 cartridge // http://www.pico-8.com
 version 8
 __lua__
 -- 10print, v0.1
--- <me@lmorcard.com>
+-- <me@lmorchard.com>
 
 -- this is an elaborate
 -- translation of this program
