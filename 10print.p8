@@ -31,8 +31,8 @@ end
 
 function _update()
  for i=1,speed do
-	 add(buf, rnd(1) <= 0.5 and '\\' or '/')
-	end	
+  add(buf, rnd(1) <= 0.5 and '\\' or '/')
+ end 
  if count(buf) >= cols * rows then
   scroll()
  end
@@ -49,12 +49,12 @@ function _draw()
           127, vmargin, fgcol)
  rectfill(0, 127-vmargin, 
           127, 127, fgcol)
-	rectfill(0, 0,
-	         hmargin, 127, fgcol)
-	rectfill(127-hmargin, 0,
-	         127, 127, fgcol)
-	
-	local x = hmargin + 1
+ rectfill(0, 0,
+          hmargin, 127, fgcol)
+ rectfill(127-hmargin, 0,
+          127, 127, fgcol)
+ 
+ local x = hmargin + 1
  local y = vmargin + 1
  local str = ''
  
@@ -78,20 +78,20 @@ function scroll()
 end
 
 function print_slashes(str, x, y, clr)
-	for idx = 1,#str do
-	 local ox = x + ((idx-1)*w)
-	 local c = sub(str, idx, idx+1)
-	 if c == '/' then
-	  line(ox, y,
-	       ox+(w-1), y+(h-1),
-	       clr)
-	 end
-	 if c == '\\' then
-	  line(ox+(w-1), y,
-	       ox, y+(h-1),
-	       clr)
-	 end
-	end
+ for idx = 1,#str do
+  local ox = x + ((idx-1)*w)
+  local c = sub(str, idx, idx+1)
+  if c == '/' then
+   line(ox, y,
+        ox+(w-1), y+(h-1),
+        clr)
+  end
+  if c == '\\' then
+   line(ox+(w-1), y,
+        ox, y+(h-1),
+        clr)
+  end
+ end
 end
 __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
