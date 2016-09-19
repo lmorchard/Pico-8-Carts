@@ -60,6 +60,7 @@ function _init()
  generate_planet()
 end
 
+-- inspired by http://www.emanueleferonato.com/2011/05/17/using-cellular-automata-to-generate-random-land-and-water-maps-with-flash/
 function generate_planet()
  local planet = flr(rnd(count(planet_colors))) + 1
  local lc = planet_colors[planet][1]
@@ -106,7 +107,7 @@ ct = 0
 
 function _update()
  ct = (ct + 1) % 100
- l = (l+0.25)%128
+ l = (l-0.25)%128
  
  if btn(5) then
   z = min(max_z, z + zstep)
@@ -150,7 +151,7 @@ end
 pi = 3.142
 l = 0 -- left pos of globe
 
--- draw a rotating globe
+-- draw a rotating globe - http://www.lexaloffle.com/bbs/?tid=3348
 -- r: radius
 -- l: left offset for rotation
 function globe(r, l, ox, oy)
@@ -187,7 +188,8 @@ function _draw()
  cls()
  foreach(stars, draw_star)
 
- globe(64, l, 64, -64)
+ -- globe(64, l, 64, -64)
+ globe(64, l, 0, 0)
  -- globe(32, l, 0, 0)
 
  -- print_center(61, 'wanna go to space!!!')
