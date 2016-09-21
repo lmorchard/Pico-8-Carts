@@ -3,7 +3,7 @@ version 8
 __lua__
 -- eliteish, v0.3
 -- <me@lmorchard.com>
-auto_switch_delay = 15 * 30
+auto_switch_delay = 150 * 30
 
 base0=0x5a4a
 base1=0x0248
@@ -65,96 +65,6 @@ commodities_data = {
 commodities = {}
 tradnames = {}
 
-desc_list = {}
-desc_list['\x81'] =	{"fabled", "notable", "well known", "famous", "noted"}
-desc_list['\x82'] =	{"very", "mildly", "most", "reasonably", ""}
-desc_list['\x83'] =	{"ancient", "\x95", "great", "vast", "pink"}
-desc_list['\x84'] =	{"\x9e \x9d plantations", "mountains", "\x9c", "\x94 forests", "oceans"}
-desc_list['\x85'] =	{"shyness", "silliness", "mating traditions", "loathing of \x86", "love for \x86"}
-desc_list['\x86'] =	{"food blenders", "tourists", "poetry", "discos", "\x8e"}
-desc_list['\x87'] =	{"talking tree", "crab", "bat", "lobst", "\xb2"}
-desc_list['\x88'] =	{"beset", "plagued", "ravaged", "cursed", "scourged"}
-desc_list['\x89'] =	{"\x96 civil war", "\x9b \x98 \x99s", "a \x9b disease", "\x96 earthquakes", "\x96 solar activity"}
-desc_list['\x8a'] =	{"its \x83 \x84", "the \xb1 \x98 \x99","its inhabitants' \x9a \x85", "\xa1", "its \x8d \x8e"}
-desc_list['\x8b'] =	{"juice", "brandy", "water", "brew", "gargle blasters"}
-desc_list['\x8c'] =	{"\xb2", "\xb1 \x99", "\xb1 \xb2", "\xb1 \x9b", "\x9b \xb2"}
-desc_list['\x8d'] =	{"fabulous", "exotic", "hoopy", "unusual", "exciting"}
-desc_list['\x8e'] =	{"cuisine", "night life", "casinos", "sit coms", " \xa1 "}
-desc_list['\x8f'] =	{"\xb0", "the planet \xb0", "the world \xb0", "this planet", "this world"}
-desc_list['\x90'] =	{"n unremarkable", " boring", " dull", " tedious", " revolting"}
-desc_list['\x91'] =	{"planet", "world", "place", "little planet", "dump"}
-desc_list['\x92'] =	{"wasp", "moth", "grub", "ant", "\xb2"}
-desc_list['\x93'] =	{"poet", "arts graduate", "yak", "snail", "slug"}
-desc_list['\x94'] =	{"tropical", "dense", "rain", "impenetrable", "exuberant"}
-desc_list['\x95'] =	{"funny", "wierd", "unusual", "strange", "peculiar"}
-desc_list['\x96'] =	{"frequent", "occasional", "unpredictable", "dreadful", "deadly"}
-desc_list['\x97'] =	{"\x82 \x81 for \x8a", "\x82 \x81 for \x8a and \x8a", "\x88 by \x89", "\x82 \x81 for \x8a but \x88 by \x89","a\x90 \x91"}
-desc_list['\x98'] =	{"\x9b", "mountain", "edible", "tree", "spotted"}
-desc_list['\x99'] =	{"\x9f", "\xa0", "\x87oid", "\x93", "\x92"}
-desc_list['\x9a'] =	{"ancient", "exceptional", "eccentric", "ingrained", "\x95"}
-desc_list['\x9b'] =	{"killer", "deadly", "evil", "lethal", "vicious"}
-desc_list['\x9c'] =	{"parking meters", "dust clouds", "ice bergs", "rock formations", "volcanoes"}
-desc_list['\x9d'] =	{"plant", "tulip", "banana", "corn", "\xb2weed"}
-desc_list['\x9e'] =	{"\xb2", "\xb1 \xb2", "\xb1 \x9b", "inhabitant", "\xb1 \xb2"}
-desc_list['\x9f'] =	{"shrew", "beast", "bison", "snake", "wolf"}
-desc_list['\xa0'] =	{"leopard", "cat", "monkey", "goat", "fish"}
-desc_list['\xa1'] =	{"\x8c \x8b", "\xb1 \x9f \xa2","its \x8d \xa0 \xa2", "\xa3 \xa4", "\x8c \x8b"}
-desc_list['\xa2'] =	{"meat", "cutlet", "steak", "burgers", "soup"}
-desc_list['\xa3'] =	{"ice", "mud", "zero-g", "vacuum", "\xb1 ultra"}
-desc_list['\xa4'] =	{"hockey", "cricket", "karate", "polo", "tennis"}
-
-function gen_rnd_number()
- local a, x
-	x = band(rnd_seed.a * 2, 0xFF)
-	a = x + rnd_seed.c
-	if rnd_seed.a > 127 then	a += 1 end
-	rnd_seed.a = band(a, 0xFF)
-	rnd_seed.c = x
-
-	a = a / 256	--[[ a = any carry left from above ]]
-	x = rnd_seed.b
-	a = band((a + x + rnd_seed.d), 0xFF)
-	rnd_seed.b = a
-	rnd_seed.d = x
-	return a
-end
-
-function goat_soup(source, psy)
- rnd_seed = psy.goatsoupseed
- local out = ''
- local idx = 0
- for idx = 1,#source do
-  local c = sub(source, idx, idx)
-  if c < '\x80' then
-   out = out .. c
-  elseif c <= '\xA4' then
-   local rn = gen_rnd_number()
-   local k = 1
-   if rn >= 0x33 then k += 1 end
-   if rn >= 0x66 then k += 1 end
-   if rn >= 0x99 then k += 1 end
-   if rn >= 0xCC then k += 1 end
-   out = out .. goat_soup(desc_list[c][k], psy)
-  elseif c == '\xb0' then -- planet name
-   out = out .. psy.name
-  elseif c == '\xb1' then -- <planet name>ian
-   local e = sub(psy.name, #psy.name, #psy.name)
-   if e == 'i' or e == 'e' then
-    out = out .. sub(psy.name, 1, #psy.name - 1) .. 'ian'
-   else
-    out = out .. psy.name .. 'ian'
-   end
-  elseif c == '\xb2' then -- random name
-   local len = band(gen_rnd_number(), 3) + 1;
-   for i = 1, len do
-    local x = band(gen_rnd_number(), 0x3e);
-    out = out .. sub(pairs0, x+1, x+2)
-   end
-  end
- end
- return out
-end
-
 function mysrand(seed)
 	lastrand = seed - 1
 end
@@ -208,11 +118,11 @@ function makesystem(s)
  thissys.x = shr(s.w1, 8)
  thissys.y = shr(s.w0, 8)
 
- thissys.govtype = band(shr(s.w1, 3), 7) + 1 -- bits 3,4 &5 of w1
- thissys.economy = band(shr(s.w0, 8), 7) + 1-- bits 8,9 &A of w0 
- 
+ thissys.govtype = band(shr(s.w1, 3), 7) -- bits 3,4 &5 of w1
+
+ thissys.economy = band(shr(s.w0, 8), 7) -- bits 8,9 &A of w0 
  if thissys.govtype <= 1 then
-  thissys.economy = bor(thissys.economy, 2) + 1
+  thissys.economy = bor(thissys.economy, 2)
  end
  
  thissys.techlev = band(shr(s.w1, 8), 3) + bxor(thissys.economy, 7)
@@ -224,9 +134,13 @@ function makesystem(s)
  
  thissys.population = 4*(thissys.techlev) + (thissys.economy)
  thissys.population +=  (thissys.govtype) + 1
+
+ thissys.productivity = (bxor(thissys.economy, 7)+3)*((thissys.govtype)+4);
+ thissys.productivity *= (thissys.population)*8;
  
  thissys.radius = 256 * (band(shr(s.w2, 8), 15) + 11) + thissys.x;  
 
+ -- thissys.goatsoupseed = {a=210, b=130, c=84, d=219}
  thissys.goatsoupseed = {}
 	thissys.goatsoupseed.a = band(s.w1, 0xFF)
 	thissys.goatsoupseed.b = shr(s.w1, 8)
@@ -252,7 +166,7 @@ function makesystem(s)
   thissys.name = thissys.name .. sub(s_pairs, pair4+1, pair4+2)
  end
  thissys.name = stripout(thissys.name,'.');
- thissys.description = goat_soup("\x8F is \x97.", thissys)
+ -- thissys.description = goat_soup("\x8F is \x97.", thissys)
 
  return thissys
 end
@@ -264,6 +178,121 @@ function stripout(s, c)
   x = sub(s, i, i)
   if x != c then
    out = out .. x
+  end
+ end
+ return out
+end
+
+desc_list = {}
+desc_list['\x81'] =	{"fabled", "notable", "well known", "famous", "noted"}
+desc_list['\x82'] =	{"very", "mildly", "most", "reasonably", ""}
+desc_list['\x83'] =	{"ancient", "\x95", "great", "vast", "pink"}
+desc_list['\x84'] =	{"\x9e \x9d plantations", "mountains", "\x9c", "\x94 forests", "oceans"}
+desc_list['\x85'] =	{"shyness", "silliness", "mating traditions", "loathing of \x86", "love for \x86"}
+desc_list['\x86'] =	{"food blenders", "tourists", "poetry", "discos", "\x8e"}
+desc_list['\x87'] =	{"talking tree", "crab", "bat", "lobst", "\xb2"}
+desc_list['\x88'] =	{"beset", "plagued", "ravaged", "cursed", "scourged"}
+desc_list['\x89'] =	{"\x96 civil war", "\x9b \x98 \x99s", "a \x9b disease", "\x96 earthquakes", "\x96 solar activity"}
+desc_list['\x8a'] =	{"its \x83 \x84", "the \xb1 \x98 \x99","its inhabitants' \x9a \x85", "\xa1", "its \x8d \x8e"}
+desc_list['\x8b'] =	{"juice", "brandy", "water", "brew", "gargle blasters"}
+desc_list['\x8c'] =	{"\xb2", "\xb1 \x99", "\xb1 \xb2", "\xb1 \x9b", "\x9b \xb2"}
+desc_list['\x8d'] =	{"fabulous", "exotic", "hoopy", "unusual", "exciting"}
+desc_list['\x8e'] =	{"cuisine", "night life", "casinos", "sit coms", " \xa1 "}
+desc_list['\x8f'] =	{"\xb0", "the planet \xb0", "the world \xb0", "this planet", "this world"}
+desc_list['\x90'] =	{"n unremarkable", " boring", " dull", " tedious", " revolting"}
+desc_list['\x91'] =	{"planet", "world", "place", "little planet", "dump"}
+desc_list['\x92'] =	{"wasp", "moth", "grub", "ant", "\xb2"}
+desc_list['\x93'] =	{"poet", "arts graduate", "yak", "snail", "slug"}
+desc_list['\x94'] =	{"tropical", "dense", "rain", "impenetrable", "exuberant"}
+desc_list['\x95'] =	{"funny", "wierd", "unusual", "strange", "peculiar"}
+desc_list['\x96'] =	{"frequent", "occasional", "unpredictable", "dreadful", "deadly"}
+desc_list['\x97'] =	{"\x82 \x81 for \x8a", "\x82 \x81 for \x8a and \x8a", "\x88 by \x89", "\x82 \x81 for \x8a but \x88 by \x89","a\x90 \x91"}
+desc_list['\x98'] =	{"\x9b", "mountain", "edible", "tree", "spotted"}
+desc_list['\x99'] =	{"\x9f", "\xa0", "\x87oid", "\x93", "\x92"}
+desc_list['\x9a'] =	{"ancient", "exceptional", "eccentric", "ingrained", "\x95"}
+desc_list['\x9b'] =	{"killer", "deadly", "evil", "lethal", "vicious"}
+desc_list['\x9c'] =	{"parking meters", "dust clouds", "ice bergs", "rock formations", "volcanoes"}
+desc_list['\x9d'] =	{"plant", "tulip", "banana", "corn", "\xb2weed"}
+desc_list['\x9e'] =	{"\xb2", "\xb1 \xb2", "\xb1 \x9b", "inhabitant", "\xb1 \xb2"}
+desc_list['\x9f'] =	{"shrew", "beast", "bison", "snake", "wolf"}
+desc_list['\xa0'] =	{"leopard", "cat", "monkey", "goat", "fish"}
+desc_list['\xa1'] =	{"\x8c \x8b", "\xb1 \x9f \xa2","its \x8d \xa0 \xa2", "\xa3 \xa4", "\x8c \x8b"}
+desc_list['\xa2'] =	{"meat", "cutlet", "steak", "burgers", "soup"}
+desc_list['\xa3'] =	{"ice", "mud", "zero-g", "vacuum", "\xb1 ultra"}
+desc_list['\xa4'] =	{"hockey", "cricket", "karate", "polo", "tennis"}
+
+nums= {
+41,
+61,
+103,
+165,
+13,
+179,
+192,
+115,
+51,
+167,
+219,
+130
+}
+nums_idx = 1
+
+function gen_rnd_number_test()
+ local num = nums[nums_idx]
+ nums_idx += 1
+ if nums_idx > count(nums) then
+  nums_idx = 1
+ end
+ return num
+end
+ 
+function gen_rnd_number()
+	local x = band(shl(rnd_seed.a, 1), 0xFF)
+	local a = x + rnd_seed.c
+	if rnd_seed.a > 127 then a += 1 end
+	rnd_seed.a = band(a, 0xFF)
+	rnd_seed.c = x
+
+	a = flr(a / 256)	--[[ a = any carry left from above ]]
+	x = rnd_seed.b
+	a = band(a + x + rnd_seed.d, 0xFF)
+	rnd_seed.b = a
+	rnd_seed.d = x
+	return a
+end
+
+function goat_soup(source, psy)
+ local out = ''
+ local idx = 0
+ for idx = 1,#source do
+  local c = sub(source, idx, idx)
+  if c < '\x80' then
+   out = out .. c
+  elseif c <= '\xA4' then
+   local rn = gen_rnd_number()
+   local k = 1
+   if rn >= 0x33 then k += 1 end
+   if rn >= 0x66 then k += 1 end
+   if rn >= 0x99 then k += 1 end
+   if rn >= 0xCC then k += 1 end
+   out = out .. goat_soup(desc_list[c][k], psy)
+  elseif c == '\xb0' then -- planet name
+   out = out .. psy.name
+  elseif c == '\xb1' then -- <planet name>ian
+   local e = sub(psy.name, #psy.name, #psy.name)
+   if e == 'i' or e == 'e' then
+    out = out .. sub(psy.name, 1, #psy.name - 1) .. 'ian'
+   else
+    out = out .. psy.name .. 'ian'
+   end
+  elseif c == '\xb2' then -- random name
+				local i = 0
+				local len = band(gen_rnd_number(), 3)
+    while i <= len do
+     local x = band(gen_rnd_number(), 0x3e)
+     out = out .. sub(pairs0, x+1, x+2)
+     i += 1
+    end
   end
  end
  return out
@@ -493,23 +522,21 @@ function _draw()
  globe(32, l, 0, 0)
 
  planet = galaxy[currentplanet]
- govname = govnames[planet.govtype] or planet.govtype
- econname = econnames[planet.economy] or planet.economy
+ govname = govnames[planet.govtype + 1] or planet.govtype
+ econname = econnames[planet.economy + 1] or planet.economy
 
- print_center(2, planet.name)
+ print_center(2, planet.name .. ' @ ' .. planet.x .. ',' .. planet.y)
  print_center(10, 'population: ' .. shr(planet.population, 3) .. ' billion')
  print_center(17, 'government: ' .. govname)
- print_center(24, 'economy: ' .. econname)
- print_center_wrap(98, planet.description)
-
- -- print_center(61, 'wanna go to space!!!')
- --[[
- if z >= 1 then
-  print_center(116, 'warp factor ' .. ((z / max_z) * 9.999))
- else 
-  print_center(116, 'impulse drive at ' .. (100 * z) .. '%')
- end
- ]]
+ print_center(24, 'economy: ' .. econname .. ' @ ' .. planet.techlev)
+ -- print_center_wrap(98, planet.description)
+ rnd_seed = {
+  a=planet.goatsoupseed.a,
+  b=planet.goatsoupseed.b,
+  c=planet.goatsoupseed.c,
+  d=planet.goatsoupseed.d
+ }
+ print_center_wrap(98, goat_soup("\x8F is \x97.", planet))
 end
 
 function printwrap(s)
