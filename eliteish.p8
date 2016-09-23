@@ -25,7 +25,7 @@ lastrand = 0
 seed = {}
 rnd_seed = 0
 
-currentplanet = 3
+currentplanet = 8
 galaxynum = 1
 galaxy = {}
 
@@ -227,11 +227,6 @@ function stripout(s, c)
  return out
 end
 
-test_nums_idx = 1
-test_nums = {
-}
-
- 
 function gen_rnd_number()
 	local x = band(rnd_seed.a * 2, 0xFF)
 	local a = x + rnd_seed.c
@@ -363,8 +358,17 @@ function _init()
 end
 
 -- inspired by http://www.emanueleferonato.com/2011/05/17/using-cellular-automata-to-generate-random-land-and-water-maps-with-flash/
-planet_w = 32
+planet_w = 64
 planet_h = 32
+planet_buf = {}
+
+function bset(x, y, c)
+ planet_buf[1 + flr(x) + flr(y)*planet_w] = c
+end
+
+function bget(x, y)
+ return planet_buf[1 + flr(x) + flr(y)*planet_w]
+end
 
 function generate_planet()
  local planet = galaxy[currentplanet]
@@ -374,26 +378,21 @@ function generate_planet()
  local lc = planet_colors[planet][1]
  local wc = planet_colors[planet][2]
 
- for x=0,planet_w-1 do
-  for y=0,planet_h-1 do
-   sset(x, y, rnd(1) < 0.5 and lc or wc)
+ for y=0, planet_h-1 do
+  for x=0, planet_w-1 do
+   bset(x, y, rnd(1) < 0.5 and lc or wc)
   end
  end
 
- for i=1,3 do
-  iterate_map(lc, wc, planet_w, planet_h)
- end
-end
-
-function iterate_map(lc, wc, w, h)
- for x = 0,w-1 do
-  for y = 0,h-1 do
-   local i = x + (128 * (y-1))
-   c = sget(x, y)
-   if c == lc and adjacent_type_count(x, y, lc) < 4 then
-    sset(x, y, wc)
-   elseif c == wc and adjacent_type_count(x, y, lc) >= 5 then
-    sset(x, y, lc)
+ for i = 1, 1 do
+  for x = 0, planet_w-1 do
+   for y = 0, planet_h-1 do
+    c = bget(x, y)
+    if c == lc and adjacent_type_count(x, y, lc) < 4 then
+     bset(x, y, wc)
+    elseif c == wc and adjacent_type_count(x, y, lc) >= 5 then
+     bset(x, y, lc)
+    end
    end
   end
  end
@@ -403,7 +402,7 @@ function adjacent_type_count(x, y, t)
  local count = 0
  for ox=-1,1 do
   for oy=-1,1 do
-   if not (ox == 0 and oy == 0) and sget((x + ox) % 128, (y + oy) % 128) == t then
+   if not (ox == 0 and oy == 0) and bget((x + ox) % planet_w, (y + oy) % planet_h) == t then
     count += 1
    end
   end
@@ -415,7 +414,7 @@ ct = 0
 
 function _update()
  ct = (ct + 1) % 3000
- l = (l-0.125) % planet_w
+ l = (l-0.25) % planet_w
  
  if btn(5) then
   z = min(max_z, z + zstep)
@@ -486,11 +485,11 @@ function globe(r, l, ox, oy, fw, fh)
   for k=0,hw,hw/w do
    local y=(j-(hh-r))*hh/r
    -- north hemisphere
-   local col=sget((k+l)%fw,y)
+   local col=bget((k+l)%fw,y)
    pset(ox + x+o - hw, oy + j - hh, col)
    
    -- south hemisphere
-   col=sget((k+l) % fw, fh-y)
+   col=bget((k+l) % fw, fh-y)
    pset(ox + x+o - hw, oy + fh-j - hh, col)
    o+=1
   end
