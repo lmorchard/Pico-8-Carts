@@ -25,7 +25,7 @@ lastrand = 0
 seed = {}
 rnd_seed = 0
 
-currentplanet = 8
+currentplanet = 3
 galaxynum = 1
 galaxy = {}
 
@@ -140,7 +140,6 @@ function makesystem(s)
  
  thissys.radius = 256 * (band(shr(s.w2, 8), 15) + 11) + thissys.x;  
 
- -- thissys.goatsoupseed = {a=210, b=130, c=84, d=219}
  thissys.goatsoupseed = {}
 	thissys.goatsoupseed.a = band(s.w1, 0xFF)
 	thissys.goatsoupseed.b = shr(s.w1, 8)
@@ -166,7 +165,14 @@ function makesystem(s)
   thissys.name = thissys.name .. sub(s_pairs, pair4+1, pair4+2)
  end
  thissys.name = stripout(thissys.name,'.');
- -- thissys.description = goat_soup("\x8F is \x97.", thissys)
+
+ rnd_seed = {
+  a=thissys.goatsoupseed.a,
+  b=thissys.goatsoupseed.b,
+  c=thissys.goatsoupseed.c,
+  d=thissys.goatsoupseed.d
+ }
+ thissys.description = goat_soup("\x8F is \x97.", thissys)
 
  return thissys
 end
@@ -220,34 +226,13 @@ desc_list['\xa1'] =	{"\x8c \x8b", "\xb1 \x9f \xa2","its \x8d \xa0 \xa2", "\xa3 \
 desc_list['\xa2'] =	{"meat", "cutlet", "steak", "burgers", "soup"}
 desc_list['\xa3'] =	{"ice", "mud", "zero-g", "vacuum", "\xb1 ultra"}
 desc_list['\xa4'] =	{"hockey", "cricket", "karate", "polo", "tennis"}
-
-nums= {
-41,
-61,
-103,
-165,
-13,
-179,
-192,
-115,
-51,
-167,
-219,
-130
+test_nums_idx = 1
+test_nums = {
 }
-nums_idx = 1
 
-function gen_rnd_number_test()
- local num = nums[nums_idx]
- nums_idx += 1
- if nums_idx > count(nums) then
-  nums_idx = 1
- end
- return num
-end
  
 function gen_rnd_number()
-	local x = band(shl(rnd_seed.a, 1), 0xFF)
+	local x = band(rnd_seed.a * 2, 0xFF)
 	local a = x + rnd_seed.c
 	if rnd_seed.a > 127 then a += 1 end
 	rnd_seed.a = band(a, 0xFF)
@@ -377,6 +362,9 @@ function _init()
 end
 
 -- inspired by http://www.emanueleferonato.com/2011/05/17/using-cellular-automata-to-generate-random-land-and-water-maps-with-flash/
+planet_w = 32
+planet_h = 32
+
 function generate_planet()
  local planet = galaxy[currentplanet]
  srand(planet.goatsoupseed.a + planet.goatsoupseed.b)
@@ -385,20 +373,20 @@ function generate_planet()
  local lc = planet_colors[planet][1]
  local wc = planet_colors[planet][2]
 
- for x=0,127 do
-  for y=0,127 do
+ for x=0,planet_w-1 do
+  for y=0,planet_h-1 do
    sset(x, y, rnd(1) < 0.5 and lc or wc)
   end
  end
 
- for i=1,4 do
-  iterate_map(lc, wc)
+ for i=1,3 do
+  iterate_map(lc, wc, planet_w, planet_h)
  end
 end
 
-function iterate_map(lc, wc)
- for x = 0,127 do
-  for y = 0,127 do
+function iterate_map(lc, wc, w, h)
+ for x = 0,w-1 do
+  for y = 0,h-1 do
    local i = x + (128 * (y-1))
    c = sget(x, y)
    if c == lc and adjacent_type_count(x, y, lc) < 4 then
@@ -426,7 +414,7 @@ ct = 0
 
 function _update()
  ct = (ct + 1) % 3000
- l = (l-0.25)%128
+ l = (l-0.125) % planet_w
  
  if btn(5) then
   z = min(max_z, z + zstep)
@@ -459,17 +447,8 @@ function print_center(y, s)
  x += rnd(z)
  y += rnd(z)
  
- --[[
- for _x=-off*2,off*2 do
-  for _y=-off*2,off*2 do
-   print(s,x+_x,y+_y,1)
-  end
- end
- ]]
- 
  for _x=-off,off do
   for _y=-off,off do
-   -- print(s,x+_x,y+_y,2)
    print(s,x+_x,y+_y,1)
   end
  end
@@ -483,31 +462,35 @@ l = 0 -- left pos of globe
 -- draw a rotating globe - http://www.lexaloffle.com/bbs/?tid=3348
 -- r: radius
 -- l: left offset for rotation
-function globe(r, l, ox, oy)
- local c = flr(2*pi*r) -- circumference
+function globe(r, l, ox, oy, fw, fh)
+ local c = flr(2*pi*r) -- circumferenc1e
  
  local i=c/4 --point on the circle
 
- for j=64-r,64 do
+ local hr = r / 2
+ local hw = fw / 2
+ local hh = fh / 2
+
+ for j=hh-r,hh do
   -- foreach screen line, find the most left point in the circle
-  local y = flr(sin(i/c)*r+64)
+  local y = flr(sin(i/c)*r+hh)
   while y == j do
    i += 1
-   y = flr(sin(i/c)*r+64)
+   y = flr(sin(i/c)*r+hh)
   end
-  local x = cos(i/c)*r+64
+  local x = cos(i/c)*r+hw
   
-  local w = 128 - x*2 --line width
+  local w = fw - x*2 --line width
   local o = 0
-  for k=0,64,64/w do
-   local y=(j-(64-r))*64/r
+  for k=0,hw,hw/w do
+   local y=(j-(hh-r))*hh/r
    -- north hemisphere
-   local col=sget((k+l)%128,y)
-   pset(ox + x+o, oy + j, col)
+   local col=sget((k+l)%fw,y)
+   pset(ox + x+o - hw, oy + j - hh, col)
    
    -- south hemisphere
-   col=sget((k+l)%128,128-y)
-   pset(ox + x+o, oy + 128-j, col)
+   col=sget((k+l) % fw, fh-y)
+   pset(ox + x+o - hw, oy + fh-j - hh, col)
    o+=1
   end
  end
@@ -517,26 +500,19 @@ function _draw()
  cls()
  foreach(stars, draw_star)
 
- -- globe(64, l, 64, -64)
- -- globe(64, l, 0, 0)
- globe(32, l, 0, 0)
+ globe(32, l, 64, 64, planet_w, planet_h)
 
  planet = galaxy[currentplanet]
  govname = govnames[planet.govtype + 1] or planet.govtype
  econname = econnames[planet.economy + 1] or planet.economy
 
- print_center(2, planet.name .. ' @ ' .. planet.x .. ',' .. planet.y)
+ print_center(2, planet.name)
  print_center(10, 'population: ' .. shr(planet.population, 3) .. ' billion')
  print_center(17, 'government: ' .. govname)
- print_center(24, 'economy: ' .. econname .. ' @ ' .. planet.techlev)
- -- print_center_wrap(98, planet.description)
- rnd_seed = {
-  a=planet.goatsoupseed.a,
-  b=planet.goatsoupseed.b,
-  c=planet.goatsoupseed.c,
-  d=planet.goatsoupseed.d
- }
- print_center_wrap(98, goat_soup("\x8F is \x97.", planet))
+ print_center(24, 'economy: ' .. econname)
+ print_center_wrap(98, planet.description)
+
+ pset(16, 16, 7)
 end
 
 function printwrap(s)
@@ -569,13 +545,6 @@ function print_center_wrap(oy, str)
  end
 
  print_center(curr_y, sub(str, line_start_idx, #str))
-
- --[[
- for idx = 1, #s, lw+1 do
-  print_center(y, sub(s, idx, idx + lw))
-  y += lh
- end
- ]]
 end
 
 __gfx__
