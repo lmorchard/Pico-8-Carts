@@ -62,6 +62,44 @@ commodities_data = {
  {0x35, 0x0F,0xC0,0x07,0,"alien items "},
 }
 
+desc_list = {}
+desc_list['\x81'] =	{"fabled", "notable", "well known", "famous", "noted"}
+desc_list['\x82'] =	{"very", "mildly", "most", "reasonably", ""}
+desc_list['\x83'] =	{"ancient", "\x95", "great", "vast", "pink"}
+desc_list['\x84'] =	{"\x9e \x9d plantations", "mountains", "\x9c", "\x94 forests", "oceans"}
+desc_list['\x85'] =	{"shyness", "silliness", "mating traditions", "loathing of \x86", "love for \x86"}
+desc_list['\x86'] =	{"food blenders", "tourists", "poetry", "discos", "\x8e"}
+desc_list['\x87'] =	{"talking tree", "crab", "bat", "lobst", "\xb2"}
+desc_list['\x88'] =	{"beset", "plagued", "ravaged", "cursed", "scourged"}
+desc_list['\x89'] =	{"\x96 civil war", "\x9b \x98 \x99s", "a \x9b disease", "\x96 earthquakes", "\x96 solar activity"}
+desc_list['\x8a'] =	{"its \x83 \x84", "the \xb1 \x98 \x99","its inhabitants' \x9a \x85", "\xa1", "its \x8d \x8e"}
+desc_list['\x8b'] =	{"juice", "brandy", "water", "brew", "gargle blasters"}
+desc_list['\x8c'] =	{"\xb2", "\xb1 \x99", "\xb1 \xb2", "\xb1 \x9b", "\x9b \xb2"}
+desc_list['\x8d'] =	{"fabulous", "exotic", "hoopy", "unusual", "exciting"}
+desc_list['\x8e'] =	{"cuisine", "night life", "casinos", "sit coms", " \xa1 "}
+desc_list['\x8f'] =	{"\xb0", "the planet \xb0", "the world \xb0", "this planet", "this world"}
+desc_list['\x90'] =	{"n unremarkable", " boring", " dull", " tedious", " revolting"}
+desc_list['\x91'] =	{"planet", "world", "place", "little planet", "dump"}
+desc_list['\x92'] =	{"wasp", "moth", "grub", "ant", "\xb2"}
+desc_list['\x93'] =	{"poet", "arts graduate", "yak", "snail", "slug"}
+desc_list['\x94'] =	{"tropical", "dense", "rain", "impenetrable", "exuberant"}
+desc_list['\x95'] =	{"funny", "wierd", "unusual", "strange", "peculiar"}
+desc_list['\x96'] =	{"frequent", "occasional", "unpredictable", "dreadful", "deadly"}
+desc_list['\x97'] =	{"\x82 \x81 for \x8a", "\x82 \x81 for \x8a and \x8a", "\x88 by \x89", "\x82 \x81 for \x8a but \x88 by \x89","a\x90 \x91"}
+desc_list['\x98'] =	{"\x9b", "mountain", "edible", "tree", "spotted"}
+desc_list['\x99'] =	{"\x9f", "\xa0", "\x87oid", "\x93", "\x92"}
+desc_list['\x9a'] =	{"ancient", "exceptional", "eccentric", "ingrained", "\x95"}
+desc_list['\x9b'] =	{"killer", "deadly", "evil", "lethal", "vicious"}
+desc_list['\x9c'] =	{"parking meters", "dust clouds", "ice bergs", "rock formations", "volcanoes"}
+desc_list['\x9d'] =	{"plant", "tulip", "banana", "corn", "\xb2weed"}
+desc_list['\x9e'] =	{"\xb2", "\xb1 \xb2", "\xb1 \x9b", "inhabitant", "\xb1 \xb2"}
+desc_list['\x9f'] =	{"shrew", "beast", "bison", "snake", "wolf"}
+desc_list['\xa0'] =	{"leopard", "cat", "monkey", "goat", "fish"}
+desc_list['\xa1'] =	{"\x8c \x8b", "\xb1 \x9f \xa2","its \x8d \xa0 \xa2", "\xa3 \xa4", "\x8c \x8b"}
+desc_list['\xa2'] =	{"meat", "cutlet", "steak", "burgers", "soup"}
+desc_list['\xa3'] =	{"ice", "mud", "zero-g", "vacuum", "\xb1 ultra"}
+desc_list['\xa4'] =	{"hockey", "cricket", "karate", "polo", "tennis"}
+
 commodities = {}
 tradnames = {}
 
@@ -189,43 +227,6 @@ function stripout(s, c)
  return out
 end
 
-desc_list = {}
-desc_list['\x81'] =	{"fabled", "notable", "well known", "famous", "noted"}
-desc_list['\x82'] =	{"very", "mildly", "most", "reasonably", ""}
-desc_list['\x83'] =	{"ancient", "\x95", "great", "vast", "pink"}
-desc_list['\x84'] =	{"\x9e \x9d plantations", "mountains", "\x9c", "\x94 forests", "oceans"}
-desc_list['\x85'] =	{"shyness", "silliness", "mating traditions", "loathing of \x86", "love for \x86"}
-desc_list['\x86'] =	{"food blenders", "tourists", "poetry", "discos", "\x8e"}
-desc_list['\x87'] =	{"talking tree", "crab", "bat", "lobst", "\xb2"}
-desc_list['\x88'] =	{"beset", "plagued", "ravaged", "cursed", "scourged"}
-desc_list['\x89'] =	{"\x96 civil war", "\x9b \x98 \x99s", "a \x9b disease", "\x96 earthquakes", "\x96 solar activity"}
-desc_list['\x8a'] =	{"its \x83 \x84", "the \xb1 \x98 \x99","its inhabitants' \x9a \x85", "\xa1", "its \x8d \x8e"}
-desc_list['\x8b'] =	{"juice", "brandy", "water", "brew", "gargle blasters"}
-desc_list['\x8c'] =	{"\xb2", "\xb1 \x99", "\xb1 \xb2", "\xb1 \x9b", "\x9b \xb2"}
-desc_list['\x8d'] =	{"fabulous", "exotic", "hoopy", "unusual", "exciting"}
-desc_list['\x8e'] =	{"cuisine", "night life", "casinos", "sit coms", " \xa1 "}
-desc_list['\x8f'] =	{"\xb0", "the planet \xb0", "the world \xb0", "this planet", "this world"}
-desc_list['\x90'] =	{"n unremarkable", " boring", " dull", " tedious", " revolting"}
-desc_list['\x91'] =	{"planet", "world", "place", "little planet", "dump"}
-desc_list['\x92'] =	{"wasp", "moth", "grub", "ant", "\xb2"}
-desc_list['\x93'] =	{"poet", "arts graduate", "yak", "snail", "slug"}
-desc_list['\x94'] =	{"tropical", "dense", "rain", "impenetrable", "exuberant"}
-desc_list['\x95'] =	{"funny", "wierd", "unusual", "strange", "peculiar"}
-desc_list['\x96'] =	{"frequent", "occasional", "unpredictable", "dreadful", "deadly"}
-desc_list['\x97'] =	{"\x82 \x81 for \x8a", "\x82 \x81 for \x8a and \x8a", "\x88 by \x89", "\x82 \x81 for \x8a but \x88 by \x89","a\x90 \x91"}
-desc_list['\x98'] =	{"\x9b", "mountain", "edible", "tree", "spotted"}
-desc_list['\x99'] =	{"\x9f", "\xa0", "\x87oid", "\x93", "\x92"}
-desc_list['\x9a'] =	{"ancient", "exceptional", "eccentric", "ingrained", "\x95"}
-desc_list['\x9b'] =	{"killer", "deadly", "evil", "lethal", "vicious"}
-desc_list['\x9c'] =	{"parking meters", "dust clouds", "ice bergs", "rock formations", "volcanoes"}
-desc_list['\x9d'] =	{"plant", "tulip", "banana", "corn", "\xb2weed"}
-desc_list['\x9e'] =	{"\xb2", "\xb1 \xb2", "\xb1 \x9b", "inhabitant", "\xb1 \xb2"}
-desc_list['\x9f'] =	{"shrew", "beast", "bison", "snake", "wolf"}
-desc_list['\xa0'] =	{"leopard", "cat", "monkey", "goat", "fish"}
-desc_list['\xa1'] =	{"\x8c \x8b", "\xb1 \x9f \xa2","its \x8d \xa0 \xa2", "\xa3 \xa4", "\x8c \x8b"}
-desc_list['\xa2'] =	{"meat", "cutlet", "steak", "burgers", "soup"}
-desc_list['\xa3'] =	{"ice", "mud", "zero-g", "vacuum", "\xb1 ultra"}
-desc_list['\xa4'] =	{"hockey", "cricket", "karate", "polo", "tennis"}
 test_nums_idx = 1
 test_nums = {
 }
