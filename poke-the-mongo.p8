@@ -1,11 +1,12 @@
 pico-8 cartridge // http://www.pico-8.com
 version 8
 __lua__
--- poke the mongo, v0.10
+-- poke the mongo, v1.0
 -- <me@lmorchard.com>
 
 -- todos:
--- music
+-- music for victory & defeat
+-- pink dots pointing to candy?
 -- difficulty tuning & level select
 -- better baddie ai with chase mode if detected
 -- disruptive power ups
@@ -59,6 +60,7 @@ overworld_map_max_y = overworld_map_tiles_h * 8
 current_scene = scenes.title_screen
 
 challenge = {
+ player_starting_health=50,
  min_baddies=18,
  max_baddies=25,
  encounter_hurt=2,
@@ -105,7 +107,7 @@ ball_throws = {
 
 sprites = {
  player=64,
-	ball=67,
+ ball=67,
  balloon=93,
  title=128,
  candy=83
@@ -150,6 +152,74 @@ cloud_wind = 1
 cloud_layers = 2
 clouds_per_health = 10
 clouds_wind_per_health = 2
+
+speech = {
+ start={
+  {"i haven't seen you before!",
+   "interesting, a new critter!",
+   "wow, you're adorable!",
+   "so cute! can i keep it?"},
+  {"another chance to catch you!",
+   "let's try this again."},
+  {"this one is hard to catch.",
+   "you're slippery!"},
+  {"ugh, you again."},
+  {"this #$%^ thing is impossible!"}
+ },
+ outofballs={
+  {"i need something to throw",
+   "i should collect items"},
+  {"guess i ran out of balls",
+   "where are my balls?"},
+  {"caught me empty handed!",
+   "did you know i was out?"},
+  {"now you're just taunting me!",
+   "ugh, go away."},
+  {"this game is rigged!",
+   "pay to win garbage"}
+ },
+ throw={
+  {"am i doing this right?",
+   "how about this angle?",
+   "do i throw it like this?"},
+  {"practice makes perfect!",
+   "i think i might be improving!",
+   "wow, nice moves!"},
+  {"playing hard to get?",
+   "should it move like that?",
+   "okay, now that's not fair!"},
+  {"take this!",
+   "get in the ball!",
+   "stop moving so i can hit you!",
+   "stop cheating!"},
+  {"nobody can hit this thing!",
+   "omg hax!",
+   "@#$%^&*! @#$%^&*! @#$%^&*!"}
+ },
+ escape={
+  {"i hope it stays in there!"},
+  {"maybe it'll stay this time?"},
+  {"c'mon c'mon c'mon \ndon't bust out!"},
+  {"that's right! \nyou stay in there!"},
+  {"stay in there, you #$%^er"}
+ },
+ free={
+  {"oh no, it got out?"},
+  {"guess i'll just keep trying!"},
+  {"escaped again?!"},
+  {"is there some trick to this?"},
+  {"$%^&! it broke out!"}
+ },
+ theend={
+  {"oh well, maybe next time."},
+  {"crud, it got away!"},
+  {"get back here!"},
+  {"didn't want it anyway."},
+  {"@#$% this game!",
+   "this game is boring anyway",
+   "game over, man!"}
+ }
+}
 
 function _init()
  reset_player()
@@ -215,7 +285,7 @@ function reset_player()
   sprite_idx=0,
   moving=0,
   facing=false,
- 	health=50,
+ 	health=challenge.player_starting_health,
   hurt=0,
  	dodgeh=2,
   dodgev=2,
@@ -439,9 +509,17 @@ function move_camera_with_player()
  camera(cam_x, cam_y)
 end
 
+thunder_msg_colors = { 12, 13 }
+
 function draw_hud()
  camera()
  draw_hud_health()
+ if player.health >= challenge.lightning_health_min and not lightning.active then
+  c = pick(thunder_msg_colors)
+  print_outline('press x to use lightning!', 8, c, 1)
+ elseif lightning.active then
+   print_outline("it's very effective!", 8, c, 1)
+ end
 end
 
 function draw_hud_health()
@@ -1063,19 +1141,44 @@ game_over = {step=0}
 
 function init_game_over()
  game_over.step = 0
+ game_over.t = 0
+ game_over.dt = 0.02
  current_scene = scenes.game_over
+ music(songs.title)
 end
 
 function update_game_over()
  game_over.step += 1
+ game_over.t = (game_over.t + game_over.dt) % 1
  if btn(5) or btn(4) then
   _init()
  end
 end
 
+defeat_colors = {5, 12, 13}
+
 function draw_game_over()
  cls()
- print('you were caught. \nrest awhile, then x to try again', 1, 1)
+
+ pal(12, 0)
+ pal(3, 1)
+ pal(11, 3)
+ draw_encounter_backdrop()
+ pal()
+
+ local y = 10
+ local c = pick(defeat_colors)
+ print_outline('you were caught!', y, c, 1)
+ print_outline('press x to try again', y + 18, c, 1)
+
+ local dx = 32
+ local dy = 54 + (cos(game_over.t) * 6)
+ local dz = 8
+ n = sprites.player
+ sspr(8*(n%16), 8*flr(n/16), 8, 4, dx, dy, 8 * dz, 4 * dz)
+ pal()
+ n = sprites.ball
+ sspr(8*(n%16), 8*flr(n/16)+4, 8, 4, dx, dy+(4*dz), 8 * dz, 4 * dz)
 end
 
 title_screen = {step=0}
@@ -1100,10 +1203,26 @@ function draw_title_screen()
  print('x to start', 48, 110)
 end
 
-game_won = {step=0}
+game_won = {
+ step=0,
+ zoomers={},
+ num_zoomers=200,
+ width=128,
+ height=128,
+ cx=128/2,
+ cy=128/2 - 25,
+ warpz=25,
+ zstep=1/25,
+ max_z=7.999,
+ z=0.25,
+ colors={0,1,2,4,5,6,7,8,9,10,13,14,15}
+}
 
 function init_game_won()
  game_won.step = 0
+ for i=1,game_won.num_zoomers/3 do
+  make_zoomer()
+ end
  current_scene = scenes.game_won
 end
 
@@ -1112,11 +1231,95 @@ function update_game_won()
  if btn(5) or btn(4) then
   _init()
  end
+ -- Sort zoomers by y-position so the lower "nearer" ones are always in front.
+ local function yy_comp(a, b)
+  return a.yy < b.yy
+ end
+ table.sort(game_won.zoomers, yy_comp)
+ foreach(game_won.zoomers, update_zoomer)
 end
+
+-- Too many flickerings make me pukey
+-- victory_colors = { 4, 8, 9, 10, 14, 15 }
+victory_colors = { 9, 10 }
 
 function draw_game_won()
  cls()
- print('you won! this screen sucks!', 1, 1)
+ draw_encounter_backdrop()
+ foreach(game_won.zoomers, draw_zoomer)
+ local y = 38
+ local c = pick(victory_colors)
+ print_outline('you win!', y, c, 1)
+ print_outline('the humans are too annoyed', y + 13, c, 1)
+ print_outline('to play anymore!', y + 22, c, 1)
+ print_outline('your brothers and sisters', y + 34, c, 1)
+ print_outline('are free!', y + 43, c, 1)
+end
+
+function print_outline(str, y, fc, bc)
+ local x = 64 - (#str * 2)
+ local off = 1
+
+ for _x = -off, off do
+  for _y = -off, off do
+   print(str, x + _x, y + _y, bc)
+  end
+ end
+
+ print(str, x, y, fc) 
+end
+
+function make_zoomer()
+ local f = {
+  x=(rnd(game_won.width) - (game_won.width/2)) * game_won.warpz,
+  y=(rnd(game_won.height/4) - (game_won.height/8)) * game_won.warpz,
+  w = flr(rnd(10))+5,
+  c1=pick(game_won.colors),
+  c2=pick(game_won.colors),
+  c3=pick(game_won.colors),
+  z=game_won.warpz,
+  px=0, py=0, xx=0, yy=0
+ }
+ add(game_won.zoomers, f)
+ return f
+end
+
+function update_zoomer(f)
+ f.px = f.xx
+ f.py = f.yy
+ f.xx = f.x / f.z
+ f.yy = f.y / f.z
+ f.z -= game_won.z
+ if f.z < game_won.z or f.px > game_won.width or f.py > game_won.height then
+  del(game_won.zoomers, f)
+  make_zoomer()
+ end
+end
+
+function draw_zoomer(f)
+ local w = f.w
+ local x = game_won.cx + f.xx
+ local y = game_won.cy + f.yy
+ local z = 5 * (1+cos(0.5+0.25*(y/128)))
+
+ if f.yy > 0 then
+  -- Friends below
+  local n
+  pal(10, f.c1)
+  pal(9, f.c2)
+  pal(1, f.c3)
+  zspr(sprites.player, 1, 1, x, y, z)
+  pal()
+ else
+  -- Clouds above
+  line(x+2, y,   x+w,   y,   6)
+  line(x+1, y+1, x+w+1, y+1, 6)
+  line(x+3, y+2, x+w-1, y+2, 6)
+  line(x+2, y-2, x+w-2, y-2, 7)
+  line(x+1, y-1, x+w-1, y-1, 7)
+  line(x,   y,   x+w,   y,   7)
+  line(x+2, y+1, x+w-2, y+1, 7)
+ end
 end
 
 function baddie_in_range(t,x,y)
@@ -1169,12 +1372,12 @@ end
 
 -- http://pico-8.wikia.com/wiki/draw_zoomed_sprite_(zspr)
 function zspr(n,w,h,dx,dy,dz)
- sx = 8 * (n % 16)
- sy = 8 * flr(n / 16)
- sw = 8 * w
- sh = 8 * h
- dw = sw * dz
- dh = sh * dz
+ local sx = 8 * (n % 16)
+ local sy = 8 * flr(n / 16)
+ local sw = 8 * w
+ local sh = 8 * h
+ local dw = sw * dz
+ local dh = sh * dz
  sspr(sx,sy,sw,sh, dx,dy,dw,dh)
 end
 
@@ -1202,73 +1405,36 @@ function distk(x0,y0,x1,y1)
  end
 end
 
-speech = {
- start={
-  {"i haven't seen you before!",
-   "interesting, a new critter!",
-   "wow, you're adorable!",
-   "so cute! can i keep it?"},
-  {"another chance to catch you!",
-   "let's try this again."},
-  {"this one is hard to catch.",
-   "you're slippery!"},
-  {"ugh, you again."},
-  {"this #$%^ thing is impossible!"}
- },
- outofballs={
-  {"i need something to throw",
-   "i should collect items"},
-  {"guess i ran out of balls",
-   "where are my balls?"},
-  {"caught me empty handed!",
-   "did you know i was out?"},
-  {"now you're just taunting me!",
-   "ugh, go away."},
-  {"this game is rigged!",
-   "pay to win garbage"}
- },
- throw={
-  {"am i doing this right?",
-   "how about this angle?",
-   "do i throw it like this?"},
-  {"practice makes perfect!",
-   "i think i might be improving!",
-   "wow, nice moves!"},
-  {"playing hard to get?",
-   "should it move like that?",
-   "okay, now that's not fair!"},
-  {"take this!",
-   "get in the ball!",
-   "stop moving so i can hit you!",
-   "stop cheating!"},
-  {"nobody can hit this thing!",
-   "omg hax!",
-   "@#$%^&*! @#$%^&*! @#$%^&*!"}
- },
- escape={
-  {"i hope it stays in there!"},
-  {"maybe it'll stay this time?"},
-  {"c'mon c'mon c'mon \ndon't bust out!"},
-  {"that's right! \nyou stay in there!"},
-  {"stay in there, you #$%^er"}
- },
- free={
-  {"oh no, it got out?"},
-  {"guess i'll just keep trying!"},
-  {"escaped again?!"},
-  {"is there some trick to this?"},
-  {"$%^&! it broke out!"}
- },
- theend={
-  {"oh well, maybe next time."},
-  {"crud, it got away!"},
-  {"get back here!"},
-  {"didn't want it anyway."},
-  {"@#$% this game!",
-   "this game is boring anyway",
-   "game over, man!"}
- }
-}
+table = {}
+
+-- https://github.com/adamscott/pico8-missing-builtins/blob/master/missing.lua
+function table.sort (arr, comp)
+  if not comp then
+    comp = function (a, b)
+      return a < b
+    end
+  end
+  local function partition (a, lo, hi)
+      pivot = a[hi]
+      i = lo - 1
+      for j = lo, hi - 1 do
+        if comp(a[j], pivot) then
+          i = i + 1
+          a[i], a[j] = a[j], a[i]
+        end
+      end
+      a[i + 1], a[hi] = a[hi], a[i + 1]
+      return i + 1
+    end
+  local function quicksort (a, lo, hi)
+    if lo < hi then
+      p = partition(a, lo, hi)
+      quicksort(a, lo, p - 1)
+      return quicksort(a, p + 1, hi)
+    end
+  end
+  return quicksort(arr, 1, #arr)
+end
 
 __gfx__
 00000000bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
@@ -1305,12 +1471,12 @@ bbbbba3333abbbbbbbbbba3333abbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 bbbbba3333abbbbbbbbbba3333abbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbba3333abbbbbbbbbba3333abbbbbbbbbbbbbbbbbbbbb
 000aaaa9000aaaa9000aaaa90088880008888800011111000aaaaa00000000000000000000ffff00004444000999990005555500000000003333333300000000
 00aaaa9000aaaa9000aaaa90088888808888888811111111aaaaaaaa00000000000000000ffffff0044444409999fff055554440000000003333333300000000
-0a1aa1a90a1aa1a90a1aa1a9888558888880000011100000aaa0000000000000000000000ffff3f00444414099fff3f055444340000000003333333300000000
-0aaaaaa90aaaaaa90aaaaaa9885775888000000010000000a000000000000000000000000ffffff0044444409ffffff054444440000000003333333300000000
-00a11a9000a11a9000a11a907757757700000000000000000000000000000000000000000ffffff0044444409ffffff054444440000000003333333300000000
-000aa900000aa900000aa90077755777000000000000000000000000000000000000000000ffff000044440099ffff0055444400000000003333333300000000
-000a9a9000a90a9000a9a9000777777000000000000000000000000000020200000c0c00000fff0000044400990fff0055044400000000003333333300000000
-00aa9aa90aa90aa90aa9aa9000777700000000000000000000000000022600600cc60060000fff0000044400090fff0005044400000000003333333300000000
+0a1aa1a90a1aa1a90a1aa1a9887557888880000011100000aaa0000000000000000000000ffff3f00444414099fff3f055444340000000003333333300000000
+0aaaaaa90aaaaaa90aaaaaa9555775558000000010000000a000000000000000000000000ffffff0044444409ffffff054444440000000003333333300000000
+00a11a9000a11a9000a11a905557755500000000000000000000000000000000000000000ffffff0044444409ffffff054444440000000003333333300000000
+000aa900000aa900000aa90088755788000000000000000000000000000000000000000000ffff000044440099ffff0055444400000000003333333300000000
+000a9a9000a90a9000a9a9000888888000000000000000000000000000020200000c0c00000fff0000044400990fff0055044400000000003333333300000000
+00aa9aa90aa90aa90aa9aa9000888800000000000000000000000000022600600cc60060000fff0000044400090fff0005044400000000003333333300000000
 aaaaaaaa333333333333333300aaa90000008800000011000000aa0022260060ccc6006000000000000000000000000000000000777777770000000000000000
 3333333333333333333333330aaaaa9000008800000011000000aa0022260060ccc6006000000000000000000000000000000000777777770000000000000000
 333333333333333333333333aaeaeaa900008800000011000000aa0022220020cccc00c000000000000000000000000000000000777777770000000000000000
