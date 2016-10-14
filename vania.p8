@@ -22,6 +22,7 @@ function _draw()
  if debug then fade_cls() else cls() end
  map_tiles.draw()
  draw_player()
+ circle_mask()
 end
 
 function fade_cls()
@@ -34,11 +35,51 @@ function fade_cls()
  end
 end
 
+function circle_mask()
+ local bars = 10
+ local radius = 20
+ local barwidth = radius / bars
+ local x = 0
+ local y = 0 - radius
+ local ox = player.x + 4
+ local oy = player.y + 4
+ local c = 2
+
+ for r = 0, 0.25, (0.25 / bars) do
+  local rx = 0 - sin(r) * y
+  local ry = 0 - cos(r) * y
+
+  -- mirror the 4 quadrants of the circle
+  rectfill(ox + rx, oy + ry, ox + rx - barwidth, oy + radius, c)
+  rectfill(ox + rx, oy - ry, ox + rx - barwidth, oy - radius, c)
+  rectfill(ox - rx, oy + ry, ox - rx + barwidth, oy + radius, c)
+  rectfill(ox - rx, oy - ry, ox - rx + barwidth, oy - radius, c)
+
+  -- box out the rest of the screen outside the circle
+  rectfill(0, 0, 128, oy - radius, c)
+  rectfill(0, oy + radius, 128, 128, c)
+  rectfill(0, oy - radius, ox - radius, oy + radius, c)
+  rectfill(ox + radius, oy - radius, 128, oy + radius, c)
+ end
+
+ for t = 1, 3 do
+  for r = 0, 1, 0.01 do
+   local radius = 20 - (3 - rnd(6))
+   local y = 0 - radius
+   local rx = 0 - sin(r) * y
+   local ry = 0 - cos(r) * y
+
+   pset(ox + rx, oy + ry, c)
+  end
+ end
+
+end
+
 function init_player()
  player = {
-  --sprite=sprites.init({0,1,2,3,4,5,6,7}, 0.3, 1, 1), -- player, borrowed from http://pixeljoint.com/pixelart/77341.htm
+  sprite=sprites.init({0,1,2,3,4,5,6,7}, 0.3, 1, 1), -- player, borrowed from http://pixeljoint.com/pixelart/77341.htm
   --sprite=sprites.init({16,17,18,19,19,20}, 0.4, 1, 1), -- cat
-  sprite=sprites.init({48,49,50,51,50,49}, 0.3, 1, 1), -- bird
+  --sprite=sprites.init({48,49,50,51,50,49}, 0.3, 1, 1), -- bird
   x=60, y=104,
   w=7, h=7,
   dx=0, dy=0,
