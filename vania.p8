@@ -8,17 +8,23 @@ __lua__
 -- * powerups
 --  * sensors
 --   * sight radius
---   * sense structure (temporary)
+--   * sense structure
+--     * wireframe
 --   * sense lifeforms (temporary)
+--     * radar halo
+--     * exact location
 --   * sense hidden
 --   * remote roaming drone
+--   * map system
 --  * motion
+--   * ledge climb
 --   * double jump
 --   * run speed
 --   * wall jump
---   * ledge climb
 --   * slope slide
 --   * time slow
+--   * gravity reverse
+--   * magnetic boots
 --  * weapons
 --   * short bullet
 --   * piercing bolt
@@ -42,35 +48,42 @@ world = {
 
 function _init()
  init_player()
+ effects.init()
+ particles.init()
 end
 
 function _update()
 	update_player()
+ effects.update()
+ map_tiles.update()
+ particles.update()
 end
 
 function _draw()
  cls()
- map_tiles.animate()
+ effects.predraw()
  map_tiles.draw()
- --circle_mask()
  draw_player()
+ particles.draw()
+ if player.vision.active then
+  circle_mask()
+ end
+ effects.postdraw()
 end
 
 function circle_mask()
+ local radius = player.vision.range
  local bars = 10
- local radius = 20
  local barwidth = radius / bars
- local x = 0
  local y = 0 - radius
  local ox = player.x + 4
  local oy = player.y + 4
  local c = 0
 
+ -- mirror the 4 quadrants of the circle
  for r = 0, 0.25, 0.25 / bars do
   local rx = 0 - sin(r) * y
   local ry = 0 - cos(r) * y
-
-  -- mirror the 4 quadrants of the circle
   rectfill(ox + rx, oy + ry, ox + rx - barwidth, oy + radius, c)
   rectfill(ox + rx, oy - ry, ox + rx - barwidth, oy - radius, c)
   rectfill(ox - rx, oy + ry, ox - rx + barwidth, oy + radius, c)
@@ -78,27 +91,50 @@ function circle_mask()
  end
 
  -- box out the rest of the screen outside the circle
- rectfill(0, 0, 128, oy - radius, c)
- rectfill(0, oy + radius, 128, 128, c)
+ rectfill(0, 0, 127, oy - radius, c)
+ rectfill(0, oy + radius, 127, 127, c)
  rectfill(0, oy - radius, ox - radius, oy + radius, c)
- rectfill(ox + radius, oy - radius, 128, oy + radius, c)
+ rectfill(ox + radius, oy - radius, 127, oy + radius, c)
+
+ -- fuzz the edge of the circle
+ for d = -1, 1, 1 do
+  local y = radius - d
+  for r = 0, 1.0, 0.01 do
+   if rnd(1) < (0.3 - d/10) then
+    pset(ox + sin(r) * y, oy + cos(r) * y, 1)
+   end
+  end
+ end
+
+ rect(0, 0, 127, 127, 1)
 end
 
 function init_player()
  player = {
-  sprite=sprites.init({0,1,2,3,4,5,6,7}, 0.3, 1, 1), -- player, borrowed from http://pixeljoint.com/pixelart/77341.htm
+  -- player, borrowed from http://pixeljoint.com/pixelart/77341.htm
+  sprite=sprites.init({0,1,2,3,4,5,6,7}, 0.3, 1, 1),
   --sprite=sprites.init({16,17,18,19,19,20}, 0.4, 1, 1), -- cat
   --sprite=sprites.init({48,49,50,51,50,49}, 0.3, 1, 1), -- bird
   x=60, y=104,
   w=7, h=7,
   dx=0, dy=0,
   gravity=true,
-  -- run=0.6, jump=-3,  -- tweaked for 2 x 1.5 jumps in 0.3 gravity
-  run=0.7, jump=-3,  -- tweaked for 2 x 1.5 jumps in 0.3 gravity
+  run=0.7, jump=-2.5,
+  grab={
+   available=true,
+   height=4,
+   force=-0.2,
+   active=false
+  },
   djump={
    available=false,
    ready=true,
    active=false
+  },
+  vision={
+   available=false,
+   active=true,
+   range=64
   }
  }
 end
@@ -143,9 +179,21 @@ function update_player()
 end
 
 function draw_player()
+ -- Start with normal sprite speed
+ player.sprite.speed = 0.3
  if player.djump.active then
-  -- todo jetpack particles?
-  pal(1, 12)
+  -- jetpack particles?
+  local ox = player.sprite.flipx and 6 or 1
+  local dir = player.sprite.flipx and 1 or -1
+  for i = 1, rnd(7) do
+   particles.spawn(player.x + ox, player.y + 4, 
+                   dir * rnd(0.5), rnd(1.5),
+                   rnd(15), 9)
+  end
+ end
+ if player.grab.active and player.dx != 0 then
+  -- "Scrambling" onto ledges with faster animation
+  player.sprite.speed = 1
  end
  sprites.draw(player)
  pal()
@@ -164,7 +212,7 @@ map_tiles = {
  }
 }
 
-function map_tiles.animate()
+function map_tiles.update()
 end
 
 function map_tiles.draw()
@@ -223,7 +271,6 @@ function map_tiles.on_ledge(o)
  for sx = o.x, o.x + o.w do
   local mx = sx/8
   if fget(mget(mx, (y+1)/8), map_tiles.flags.ledge) then
-   -- if not map_tiles.is_solid_at(sx, y) and not fget(mget(mx, y/8), map_tiles.flags.ledge) then
    if not map_tiles.is_solid_at(sx, y) and flr(y%8) == 7 then
     return true
    end
@@ -260,19 +307,36 @@ function motion.update(o)
   o.dx += 0.4
  end
 
- if not map_tiles.is_solid_intersect(o.x + o.dx, o.y, o.w, o.h, o.dy) then
-  o.x += o.dx
- elseif o.dx != 0 then
-  -- handle slope ascent
-  if fget(mget((o.x + o.dx) / 8, (o.y + o.h) / 8), map_tiles.flags.slope_left) or
-     fget(mget((o.x + o.w - 1 + o.dx) / 8, (o.y + o.h) / 8), map_tiles.flags.slope_right) then
+ if o.dx != 0 then
+  if not map_tiles.is_solid_intersect(o.x + o.dx, o.y, o.w, o.h, o.dy) then
+   -- Horizontal travel through empty space
+   o.x += o.dx
+  elseif fget(mget((o.x + o.dx) / 8, (o.y + o.h) / 8), map_tiles.flags.slope_left) or
+         fget(mget((o.x + o.w - 1 + o.dx) / 8, (o.y + o.h) / 8), map_tiles.flags.slope_right) then
+   -- Slope ascent
    o.x += o.dx
    o.y -= 1
+  elseif o.grab and o.grab.available then
+   -- Ledge grab and hoist
+   for g = 1, o.grab.height do
+    if not map_tiles.is_solid_intersect(o.x + o.dx, o.y - g, o.w, o.h, o.dy) then
+     o.dy += o.grab.force
+     o.grab.active = true
+     break
+    end
+   end
   end
  end
 
- if not map_tiles.is_solid_intersect(o.x, o.y + o.dy, o.w, o.h, o.dy) then
-  o.y += o.dy
+ if o.dy != 0 then
+  if not map_tiles.is_solid_intersect(o.x, o.y + o.dy, o.w, o.h, o.dy) then
+   -- Vertical travel through empty space
+   o.y += o.dy
+  end
+ else
+  if o.grab then
+   o.grab.active = false
+  end
  end
 end
 
@@ -314,6 +378,86 @@ function sprites.draw(o)
   f = s.frames[flr(s.index)]
  end
  spr(f, o.x, o.y, s.sw, s.sh, s.flipx, s.flipy)
+end
+
+effects = {
+ state={}
+}
+
+function effects.init()
+ effects.state.shake={
+  active=false,
+  intensity=0,
+  duration=0
+ }
+end
+
+function effects.update()
+ for name, effect in pairs(effects.state) do
+  if effect.active and effect.duration then 
+   if effect.duration > 0 then
+    effect.duration -= 1
+   else
+    effect.active = false
+   end
+  end
+ end
+end
+
+function effects.predraw()
+ if effects.state.shake.active then
+  camera(rnd(effects.state.shake.intensity),
+         rnd(effects.state.shake.intensity))
+ else
+  camera()
+ end
+end
+
+function effects.postdraw()
+end
+
+function effects.shake(intensity, duration)
+ effects.state.shake = {
+  active=true,
+  intensity=intensity,
+  duration=duration
+ }
+end
+
+particles = { }
+
+function particles.init()
+ particles.active = {}
+end
+
+function particles.update()
+ foreach(particles.active, particles.update_one)
+end
+
+function particles.draw()
+ foreach(particles.active, particles.draw_one)
+end
+
+function particles.update_one(particle)
+ particle.ttl -= 1
+ if particle.ttl <= 0 then
+  if particle.onexpire then
+   particle.onexpire(particle)
+  end
+  del(particles.active, particle)
+ else
+  particle.x += particle.dx
+  particle.y += particle.dy
+ end
+end
+
+function particles.draw_one(particle)
+ pset(particle.x, particle.y, particle.clr)
+end
+
+function particles.spawn(x, y, dx, dy, ttl, clr)
+ local particle = { x=x, y=y, dx=dx, dy=dy, ttl=ttl, clr=clr }
+ add(particles.active, particle)
 end
 
 __gfx__
@@ -457,13 +601,13 @@ __map__
 0000414747474700000000000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000460000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-4100000000000000000000470000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+4200000000000000000000470000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000420000420000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0000410000004100000000000041000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000410000004200000000000041000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000004200420000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-4949494949494345454448484848484840000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000004345454400000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 4040404040404040404040404040404040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
