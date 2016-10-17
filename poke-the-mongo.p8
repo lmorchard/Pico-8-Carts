@@ -432,19 +432,24 @@ function update_player()
 	local opx = player.x
 	local opy = player.y
 
+--==begin palo edit, oct 12 '16
+diag = 1
+if ((btn(0) or btn(1)) and (btn(2) or btn(3))) diag = sqrt(2.0)/2.0
+
  if btn(0) then
-  player.dx = -player.accel
+  player.dx = -player.accel*diag
   player.facing = false
  elseif btn(1) then
-  player.dx = player.accel
+  player.dx = player.accel*diag
   player.facing = true
  end
 
  if btn(2) then
-  player.dy = -player.accel
+  player.dy = -player.accel*diag
  elseif btn(3) then
-  player.dy = player.accel
+  player.dy = player.accel*diag
  end
+--==end palo edit 
 
  if lightning.active then
   lightning.duration -= 1
@@ -472,10 +477,35 @@ function update_player()
  player.x = max(0, min(map_x_max, player.x + player.dx))
  player.y = max(0, min(map_y_max, player.y + player.dy))
 
- if not passable_tile_at(player.x,player.y) then
- 	player.x = opx
- 	player.y = opy
- end
+--=== begin addition by palo, 0ct 12 '16
+ myborder = 2
+ 
+ if player.dx < 0 then
+ 	if not passable_tile_at(player.x-myborder,player.y) then
+ 		player.x = opx
+ 	--	player.y = opy
+ 	end
+
+	elseif player.dx > 0 then
+ 	if not passable_tile_at(player.x+myborder,player.y) then
+ 		player.x = opx
+ 	--	player.y = opy
+ 	end
+	end
+	
+	if player.dy < 0 then
+ 	if not passable_tile_at(player.x,player.y-myborder) then
+ 	--	player.x = opx
+ 		player.y = opy
+ 	end
+
+	elseif player.dy > 0 then
+ 	if not passable_tile_at(player.x,player.y+myborder) then
+ 	--	player.x = opx
+ 		player.y = opy
+ 	end
+	end
+--=== end addition by palo, 0ct 12 '16	
 
  for idx = 1,count(baddies) do
   baddie = baddies[idx]
@@ -1231,7 +1261,7 @@ function update_game_won()
  if btn(5) or btn(4) then
   _init()
  end
- -- Sort zoomers by y-position so the lower "nearer" ones are always in front.
+ -- sort zoomers by y-position so the lower "nearer" ones are always in front.
  local function yy_comp(a, b)
   return a.yy < b.yy
  end
@@ -1239,7 +1269,7 @@ function update_game_won()
  foreach(game_won.zoomers, update_zoomer)
 end
 
--- Too many flickerings make me pukey
+-- too many flickerings make me pukey
 -- victory_colors = { 4, 8, 9, 10, 14, 15 }
 victory_colors = { 9, 10 }
 
@@ -1303,7 +1333,7 @@ function draw_zoomer(f)
  local z = 5 * (1+cos(0.5+0.25*(y/128)))
 
  if f.yy > 0 then
-  -- Friends below
+  -- friends below
   local n
   pal(10, f.c1)
   pal(9, f.c2)
@@ -1311,7 +1341,7 @@ function draw_zoomer(f)
   zspr(sprites.player, 1, 1, x, y, z)
   pal()
  else
-  -- Clouds above
+  -- clouds above
   line(x+2, y,   x+w,   y,   6)
   line(x+1, y+1, x+w+1, y+1, 6)
   line(x+3, y+2, x+w-1, y+2, 6)
@@ -1435,7 +1465,6 @@ function table.sort (arr, comp)
   end
   return quicksort(arr, 1, #arr)
 end
-
 __gfx__
 00000000bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 00000000bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
