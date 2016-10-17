@@ -5,6 +5,8 @@ __lua__
 -- <me@lmorchard.com>
 --
 -- TODO:
+-- * level / map
+--  * compress mutually exclusive tile flags into fewer bits
 -- * powerups
 --  * sensors
 --   * sight radius
@@ -17,10 +19,10 @@ __lua__
 --   * remote roaming drone
 --   * map system
 --  * motion
---   * ledge climb
---   * double jump
+--   X ledge climb
+--   X double jump
 --   * run speed
---   * wall jump
+--   * wall grab & jump
 --   * slope slide
 --   * time slow
 --   * gravity reverse
@@ -30,7 +32,7 @@ __lua__
 --   * piercing bolt
 --   * arc spark
 --   * flamethrower
---   * cryothrower
+--   * cryo.position.hrower
 --  * misc
 --   * bait / food
 -- * creatures (common)
@@ -42,114 +44,76 @@ __lua__
 
 debug = false
 
-world = {
- gravity=0.3
-}
-
 function _init()
- init_player()
+ world.init()
+ player.init()
  effects.init()
+ map_tiles.init()
  particles.init()
+ hud.init()
 end
 
 function _update()
-	update_player()
+	player.update()
  effects.update()
  map_tiles.update()
  particles.update()
+ hud.update()
 end
 
 function _draw()
- cls()
  effects.predraw()
  map_tiles.draw()
- draw_player()
+ player.draw()
  particles.draw()
- if player.vision.active then
-  circle_mask()
- end
  effects.postdraw()
+ hud.draw()
 end
 
-function circle_mask()
- local radius = player.vision.range
- local bars = 10
- local barwidth = radius / bars
- local y = 0 - radius
- local ox = player.x + 4
- local oy = player.y + 4
- local c = 0
+world = { }
 
- -- mirror the 4 quadrants of the circle
- for r = 0, 0.25, 0.25 / bars do
-  local rx = 0 - sin(r) * y
-  local ry = 0 - cos(r) * y
-  rectfill(ox + rx, oy + ry, ox + rx - barwidth, oy + radius, c)
-  rectfill(ox + rx, oy - ry, ox + rx - barwidth, oy - radius, c)
-  rectfill(ox - rx, oy + ry, ox - rx + barwidth, oy + radius, c)
-  rectfill(ox - rx, oy - ry, ox - rx + barwidth, oy - radius, c)
- end
-
- -- box out the rest of the screen outside the circle
- rectfill(0, 0, 127, oy - radius, c)
- rectfill(0, oy + radius, 127, 127, c)
- rectfill(0, oy - radius, ox - radius, oy + radius, c)
- rectfill(ox + radius, oy - radius, 127, oy + radius, c)
-
- -- fuzz the edge of the circle
- for d = -1, 1, 1 do
-  local y = radius - d
-  for r = 0, 1.0, 0.01 do
-   if rnd(1) < (0.3 - d/10) then
-    pset(ox + sin(r) * y, oy + cos(r) * y, 1)
-   end
-  end
- end
-
- rect(0, 0, 127, 127, 1)
+function world.init()
+ world.gravity = 0.3
 end
 
-function init_player()
- player = {
-  -- player, borrowed from http://pixeljoint.com/pixelart/77341.htm
-  sprite=sprites.init({0,1,2,3,4,5,6,7}, 0.3, 1, 1),
-  --sprite=sprites.init({16,17,18,19,19,20}, 0.4, 1, 1), -- cat
-  --sprite=sprites.init({48,49,50,51,50,49}, 0.3, 1, 1), -- bird
-  x=60, y=104,
-  w=7, h=7,
-  dx=0, dy=0,
-  gravity=true,
-  run=0.7, jump=-2.5,
-  grab={
+player = { }
+
+function player.init()
+ -- player, borrowed from http://pixeljoint.com/pixelart/77341.htm
+ player.sprite = sprites.init({0,1,2,3,4,5,6,7}, 0.3, 1, 1)
+ --player.sprite = sprites.init({16,17,18,19,19,20}, 0.4, 1, 1) -- cat
+ --player.sprite = sprites.init({48,49,50,51,50,49}, 0.3, 1, 1) -- bird
+ player.position = { x=60, y=104, w=7, h=7 }
+ player.motion = { dx=0, dy=0, gravity=true, run=0.7, jump=-2.5 }
+ player.grab = {
    available=true,
    height=4,
    force=-0.2,
    active=false
-  },
-  djump={
+ }
+ player.djump = {
    available=false,
    ready=true,
    active=false
-  },
-  vision={
-   available=false,
-   active=true,
-   range=64
-  }
+ }
+ player.vision = {
+  available=false,
+  active=true,
+  range=32
  }
 end
 
-function update_player()
+function player.update()
  if btn(0) then  -- left
   player.sprite.flipx = true
   player.sprite.animating = true
-  player.dx = -player.run
+  player.motion.dx = -player.motion.run
  elseif btn(1) then  -- right
   player.sprite.flipx = false
   player.sprite.animating = true
-  player.dx = player.run
+  player.motion.dx = player.motion.run
  else
-  player.dx = 0
+  player.motion.dx = 0
   player.sprite.animating = false
  end
 
@@ -159,44 +123,63 @@ function update_player()
  
  if btnp(4) then  -- jump
   if map_tiles.is_solid_below(player) then
-   player.dy = player.jump
+   player.motion.dy = player.motion.jump
    if player.djump.available then
     player.djump.ready = true
     player.djump.active = false
    end
   elseif player.djump.available and player.djump.ready then
-   player.dy = player.jump
+   player.motion.dy = player.motion.jump
    player.djump.ready = false
    player.djump.active = true
   end
  end
 
- if player.dy >= 0 then
+ if player.motion.dy >= 0 then
   player.djump.active = false
  end
 
  motion.update(player)
 end
 
-function draw_player()
+function player.draw()
  -- Start with normal sprite speed
  player.sprite.speed = 0.3
  if player.djump.active then
   -- jetpack particles?
   local ox = player.sprite.flipx and 6 or 1
   local dir = player.sprite.flipx and 1 or -1
-  for i = 1, rnd(7) do
-   particles.spawn(player.x + ox, player.y + 4, 
-                   dir * rnd(0.5), rnd(1.5),
-                   rnd(15), 9)
+  for i = 1, 2 + rnd(2) do
+   particles.spawn(player.position.x + ox, player.position.y + 5, 
+                   dir * rnd(0.25), rnd(1.5),
+                   rnd(15), 6)
   end
  end
- if player.grab.active and player.dx != 0 then
+ if player.grab.active and player.motion.dx != 0 then
   -- "Scrambling" onto ledges with faster animation
   player.sprite.speed = 1
  end
  sprites.draw(player)
  pal()
+end
+
+hud = {
+ item_sprites = {
+  pistol=14,
+  scanner=15
+ }
+}
+
+function hud.init()
+end
+
+function hud.update()
+end
+
+function hud.draw()
+ rect(1, 1, 13, 13, 12)
+ spr(hud.item_sprites.pistol, 3, 3, 1, 1)
+ spr(hud.item_sprites.scanner, 3, 15, 1, 1)
 end
 
 map_tiles = {
@@ -211,6 +194,9 @@ map_tiles = {
   conveyor_right=7
  }
 }
+
+function map_tiles.init()
+end
 
 function map_tiles.update()
 end
@@ -259,16 +245,16 @@ end
 function map_tiles.is_solid_below(o)
  return
   map_tiles.on_ledge(o) or
-  map_tiles.is_solid_at(o.x, o.y+o.h+1) or 
-  map_tiles.is_solid_at(o.x+o.w, o.y+o.h+1)
+  map_tiles.is_solid_at(o.position.x, o.position.y+o.position.h+1) or 
+  map_tiles.is_solid_at(o.position.x+o.position.w, o.position.y+o.position.h+1)
 end
 
 function map_tiles.on_ledge(o)
- local ndy = o.dy + world.gravity
+ local ndy = o.motion.dy + world.gravity
  if ndy < 0 then return false end
 
- local y = o.y + o.h
- for sx = o.x, o.x + o.w do
+ local y = o.position.y + o.position.h
+ for sx = o.position.x, o.position.x + o.position.w do
   local mx = sx/8
   if fget(mget(mx, (y+1)/8), map_tiles.flags.ledge) then
    if not map_tiles.is_solid_at(sx, y) and flr(y%8) == 7 then
@@ -284,43 +270,43 @@ function map_tiles.on_ledge(o)
 end
 
 function map_tiles.on_ground(o)
- local ndy = o.dy + world.gravity
+ local ndy = o.motion.dy + world.gravity
  return
-  map_tiles.is_solid_at(o.x, o.y + o.h + ndy) or 
-  map_tiles.is_solid_at(o.x + o.w, o.y + o.h + ndy)
+  map_tiles.is_solid_at(o.position.x, o.position.y + o.position.h + ndy) or 
+  map_tiles.is_solid_at(o.position.x + o.position.w, o.position.y + o.position.h + ndy)
 end
 
 motion = {}
 
 function motion.update(o)
- if o.gravity then
+ if o.motion.gravity then
   motion.apply_gravity(o)
  end
 
- local map_x = flr((o.x + o.w / 2) / 8)
- local map_y = flr((o.y + o.h) / 8)
+ local map_x = flr((o.position.x + o.position.w / 2) / 8)
+ local map_y = flr((o.position.y + o.position.h) / 8)
  local tile = mget(map_x, map_y)
 
  if fget(tile, map_tiles.flags.conveyor_left) then
-  o.dx -= 0.4
+  o.motion.dx -= 0.4
  elseif fget(tile, map_tiles.flags.conveyor_right) then
-  o.dx += 0.4
+  o.motion.dx += 0.4
  end
 
- if o.dx != 0 then
-  if not map_tiles.is_solid_intersect(o.x + o.dx, o.y, o.w, o.h, o.dy) then
+ if o.motion.dx != 0 then
+  if not map_tiles.is_solid_intersect(o.position.x + o.motion.dx, o.position.y, o.position.w, o.position.h, o.motion.dy) then
    -- Horizontal travel through empty space
-   o.x += o.dx
-  elseif fget(mget((o.x + o.dx) / 8, (o.y + o.h) / 8), map_tiles.flags.slope_left) or
-         fget(mget((o.x + o.w - 1 + o.dx) / 8, (o.y + o.h) / 8), map_tiles.flags.slope_right) then
+   o.position.x += o.motion.dx
+  elseif fget(mget((o.position.x + o.motion.dx) / 8, (o.position.y + o.position.h) / 8), map_tiles.flags.slope_left) or
+         fget(mget((o.position.x + o.position.w - 1 + o.motion.dx) / 8, (o.position.y + o.position.h) / 8), map_tiles.flags.slope_right) then
    -- Slope ascent
-   o.x += o.dx
-   o.y -= 1
+   o.position.x += o.motion.dx
+   o.position.y -= 1
   elseif o.grab and o.grab.available then
    -- Ledge grab and hoist
    for g = 1, o.grab.height do
-    if not map_tiles.is_solid_intersect(o.x + o.dx, o.y - g, o.w, o.h, o.dy) then
-     o.dy += o.grab.force
+    if not map_tiles.is_solid_intersect(o.position.x + o.motion.dx, o.position.y - g, o.position.w, o.position.h, o.motion.dy) then
+     o.motion.dy += o.grab.force
      o.grab.active = true
      break
     end
@@ -328,10 +314,10 @@ function motion.update(o)
   end
  end
 
- if o.dy != 0 then
-  if not map_tiles.is_solid_intersect(o.x, o.y + o.dy, o.w, o.h, o.dy) then
+ if o.motion.dy != 0 then
+  if not map_tiles.is_solid_intersect(o.position.x, o.position.y + o.motion.dy, o.position.w, o.position.h, o.motion.dy) then
    -- Vertical travel through empty space
-   o.y += o.dy
+   o.position.y += o.motion.dy
   end
  else
   if o.grab then
@@ -341,13 +327,13 @@ function motion.update(o)
 end
 
 function motion.apply_gravity(o)
- local ndy = o.dy + world.gravity
+ local ndy = o.motion.dy + world.gravity
  if map_tiles.on_ground(o) then
-  o.dy = 0
+  o.motion.dy = 0
  elseif map_tiles.on_ledge(o) then
-  o.dy = 0
+  o.motion.dy = 0
  else
-  o.dy = ndy
+  o.motion.dy = ndy
  end
 end
 
@@ -377,7 +363,7 @@ function sprites.draw(o)
   end
   f = s.frames[flr(s.index)]
  end
- spr(f, o.x, o.y, s.sw, s.sh, s.flipx, s.flipy)
+ spr(f, o.position.x, o.position.y, s.sw, s.sh, s.flipx, s.flipy)
 end
 
 effects = {
@@ -405,6 +391,8 @@ function effects.update()
 end
 
 function effects.predraw()
+ cls()
+ -- effects.fadecls()
  if effects.state.shake.active then
   camera(rnd(effects.state.shake.intensity),
          rnd(effects.state.shake.intensity))
@@ -413,7 +401,20 @@ function effects.predraw()
  end
 end
 
+function effects.fadecls()
+ for x = 0, 127 do
+  for y = 0, 127 do
+   if rnd(100) < 50 then
+    pset(x, y, 0)
+   end
+  end
+ end
+end
+
 function effects.postdraw()
+ if player.vision.active then
+  effects.circle_mask()
+ end
 end
 
 function effects.shake(intensity, duration)
@@ -422,6 +423,44 @@ function effects.shake(intensity, duration)
   intensity=intensity,
   duration=duration
  }
+end
+
+function effects.circle_mask()
+ local radius = player.vision.range
+ local bars = 10
+ local barwidth = radius / bars
+ local y = 0 - radius
+ local ox = player.position.x + 4
+ local oy = player.position.y + 4
+ local c = 0
+
+ -- mirror the 4 quadrants of the circle
+ for r = 0, 0.25, 0.25 / bars do
+  local rx = 0 - sin(r) * y
+  local ry = 0 - cos(r) * y
+  rectfill(ox + rx, oy + ry, ox + rx - barwidth, oy + radius, c)
+  rectfill(ox + rx, oy - ry, ox + rx - barwidth, oy - radius, c)
+  rectfill(ox - rx, oy + ry, ox - rx + barwidth, oy + radius, c)
+  rectfill(ox - rx, oy - ry, ox - rx + barwidth, oy - radius, c)
+ end
+
+ -- box out the rest of the screen outside the circle
+ rectfill(0, 0, 127, oy - radius, c)
+ rectfill(0, oy + radius, 127, 127, c)
+ rectfill(0, oy - radius, ox - radius, oy + radius, c)
+ rectfill(ox + radius, oy - radius, 127, oy + radius, c)
+
+ -- fuzz the edge of the circle
+ for d = -1, 1, 1 do
+  local y = radius - d
+  for r = 0, 1.0, 0.01 do
+   if rnd(1) < (0.3 - d/10) then
+    pset(ox + sin(r) * y, oy + cos(r) * y, 1)
+   end
+  end
+ end
+
+ rect(0, 0, 127, 127, 5)
 end
 
 particles = { }
@@ -461,14 +500,14 @@ function particles.spawn(x, y, dx, dy, ttl, clr)
 end
 
 __gfx__
-000000000044ff000044ff000044ff00000000000044ff000044ff000044ff000000000000000000000000000000000000000000000000000000000000000000
-0044ff000044ff000044ff000044ff000044ff000044ff000044ff000044ff000000000000000000000000000000000000000000000000000000000000000000
-0044ff000047ff700047ff700047ff700044ff000047ff700047ff700047ff700000000000000000000000000000000000000000000000000000000000000000
-0047ff700044ff0000455f000044ff000047ff700044ff000044ff000044ff000000000000000000000000000000000000000000000000000000000000000000
-0044ff000011110000155100001111000044ff000011110000111550001111000000000000000000000000000000000000000000000000000000000000000000
-00111100005566000000000000556600001111000011550005111550001155000000000000000000000000000000000000000000000000000000000000000000
-00116600000050000000000000005000001166000500000000000000050000000000000000000000000000000000000000000000000000000000000000000000
-00500500000000000000000000000000005005000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000044ff000044ff000044ff00000000000044ff000044ff000044ff000000000000000000000000000000000000000000000000000112211000000010
+0044ff000044ff000044ff000044ff000044ff000044ff000044ff000044ff000000000000000000000000000000000000000000000000001111112200001001
+0044ff000047ff700047ff700047ff700044ff000047ff700047ff700047ff700000000000000000000000000000000000000000000000000012111000100101
+0047ff700044ff0000455f000044ff000047ff700044ff000044ff000044ff000000000000000000000000000000000000000000000000000112100022010101
+0044ff000011110000155100001111000044ff000011110000111550001111000000000000000000000000000000000000000000000000000121100022010101
+00111100005566000000000000556600001111000011550005111550001155000000000000000000000000000000000000000000000000001121000000100101
+00116600000050000000000000005000001166000500000000000000050000000000000000000000000000000000000000000000000000001111000000001001
+00500500000000000000000000000000005005000000000000000000000000000000000000000000000000000000000000000000000000000110000000000010
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -598,16 +637,16 @@ __map__
 0000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0000414747474700000000000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0000000000000000000000460000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000004747474700000000000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000410000000000000000460000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 4200000000000000000000470000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000420000420000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000410000004200000000000041000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0000000000000000004200420000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000000000420000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000004200000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0000000000004345454400000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 4040404040404040404040404040404040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
