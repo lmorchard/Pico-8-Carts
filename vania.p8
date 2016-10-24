@@ -5,7 +5,12 @@ __lua__
 -- <me@lmorchard.com>
 --
 -- todo:
+-- * physics
+--  * apply collision detection for every pixel along dx / dy path
+--    so we don't skip through things
 -- * level / map
+--  * doors to link rooms
+--   * animated transitions between door-links
 --  * compress mutually exclusive tile flags into fewer bits
 -- * powerups
 --  * sensors
@@ -53,7 +58,7 @@ function _init()
  player.init()
  effects.init()
  tiles.init()
- scene.init()
+ rooms.init()
  particles.init()
  hud.init()
 end
@@ -62,16 +67,16 @@ function _update()
 	player.update()
  effects.update()
  tiles.update()
- scene.update()
+ rooms.update()
  particles.update()
  hud.update()
 end
 
 function _draw()
  effects.predraw()
- scene.camera()
+ rooms.camera()
  tiles.draw()
- scene.draw()
+ rooms.draw()
  player.draw()
  particles.draw()
  effects.postdraw()
@@ -84,9 +89,8 @@ function world.init()
  world.gravity = 0.3
 end
 
-scene = {
- cx=0, cy=0,
- scenes={
+rooms = {
+ list={
   {x=0, y=0, w=16, h=16, sx=60, sy=104, off_x=0, off_y=0},
   {x=16, y=0, w=32, h=16, sx=60, sy=112, off_x=0, off_y=0},
   {x=0, y=16, w=16, h=48, sx=60, sy=368, off_x=0, off_y=0},
@@ -95,15 +99,15 @@ scene = {
  }
 }
 
-function scene.init()
- scene.change(5)
+function rooms.init()
+ rooms.change(5)
 end
 
-function scene.update()
+function rooms.update()
 end
 
-function scene.camera()
- local c = scene.get_current()
+function rooms.camera()
+ local c = rooms.get_current()
 
  local cx = 0
  local mw = c.w * 8
@@ -128,26 +132,26 @@ function scene.camera()
  camera(cx - c.off_x, cy - c.off_y)
 end
 
-function scene.draw()
- local c = scene.get_current()
+function rooms.draw()
+ local c = rooms.get_current()
  map(c.x, c.y, 0, 0, c.w, c.h)
 end
 
-function scene.mget(x, y)
- local c = scene.get_current()
+function rooms.mget(x, y)
+ local c = rooms.get_current()
  return mget(c.x + x, c.y + y)
 end
 
-function scene.change(idx)
- scene.current = idx
+function rooms.change(idx)
+ rooms.current = idx
 
- local c = scene.get_current()
+ local c = rooms.get_current()
  player.position.x = c.sx
  player.position.y = c.sy
 end
 
-function scene.get_current()
- return scene.scenes[scene.current]
+function rooms.get_current()
+ return rooms.list[rooms.current]
 end
 
 player = { }
@@ -210,10 +214,10 @@ function player.update()
  end
 
  if btnp(5) then
-  if scene.current == count(scene.scenes) then
-   scene.change(1)
+  if rooms.current == count(rooms.list) then
+   rooms.change(1)
   else
-   scene.change(scene.current + 1)
+   rooms.change(rooms.current + 1)
   end
  end
 
@@ -294,8 +298,8 @@ function tiles.is_solid_at(x, y)
  if x < 0 then return true end
  if y < 0 then return true end
 
- -- right & bottom edge of scene are solid
- local c = scene.get_current()
+ -- right & bottom edge of rooms are solid
+ local c = rooms.get_current()
  if x > c.w * 8 then return true end
  if y > c.h * 8 then return true end
 
@@ -303,7 +307,7 @@ function tiles.is_solid_at(x, y)
  local map_y = flr(y / 8)
  local tile_x = flr(x % 8)
  local tile_y = flr(y % 8)
- local tile = scene.mget(map_x, map_y)
+ local tile = rooms.mget(map_x, map_y)
 
  if fget(tile, tiles.flags.slope_left) and tile_y >= tile_x then
   return true
@@ -346,11 +350,11 @@ function tiles.on_ledge(o)
  local y = o.position.y + o.position.h
  for sx = o.position.x, o.position.x + o.position.w do
   local mx = sx/8
-  if fget(scene.mget(mx, (y+1)/8), tiles.flags.ledge) then
+  if fget(rooms.mget(mx, (y+1)/8), tiles.flags.ledge) then
    if not tiles.is_solid_at(sx, y) and flr(y%8) == 7 then
     return true
    end
-  elseif fget(scene.mget(mx, y/8), tiles.flags.ledge_low) then
+  elseif fget(rooms.mget(mx, y/8), tiles.flags.ledge_low) then
    if flr(y%8) == 3 then
     return true
    end
@@ -375,7 +379,7 @@ function motion.update(o)
 
  local map_x = flr((o.position.x + o.position.w / 2) / 8)
  local map_y = flr((o.position.y + o.position.h) / 8)
- local tile = scene.mget(map_x, map_y)
+ local tile = rooms.mget(map_x, map_y)
 
  if fget(tile, tiles.flags.conveyor_left) then
   o.motion.dx -= 0.4
@@ -387,8 +391,8 @@ function motion.update(o)
   if not tiles.is_solid_intersect(o.position.x + o.motion.dx, o.position.y, o.position.w, o.position.h, o.motion.dy) then
    -- horizontal travel through empty space
    o.position.x += o.motion.dx
-  elseif fget(scene.mget((o.position.x + o.motion.dx) / 8, (o.position.y + o.position.h) / 8), tiles.flags.slope_left) or
-         fget(scene.mget((o.position.x + o.position.w - 1 + o.motion.dx) / 8, (o.position.y + o.position.h) / 8), tiles.flags.slope_right) then
+  elseif fget(rooms.mget((o.position.x + o.motion.dx) / 8, (o.position.y + o.position.h) / 8), tiles.flags.slope_left) or
+         fget(rooms.mget((o.position.x + o.position.w - 1 + o.motion.dx) / 8, (o.position.y + o.position.h) / 8), tiles.flags.slope_right) then
    -- slope ascent
    o.position.x += o.motion.dx
    o.position.y -= 1
@@ -536,8 +540,8 @@ function effects.circle_mask()
   rectfill(ox - rx, oy - ry, ox - rx + barwidth, oy - radius, c)
  end
 
- -- block out the rest of the scene outside the circle
- local c = scene.get_current()
+ -- block out the rest of the rooms outside the circle
+ local c = rooms.get_current()
  local cw = c.w * 8
  local ch = c.h * 8
  if (oy - radius > 0) then
@@ -896,4 +900,3 @@ __music__
 00 41424344
 00 41424344
 00 41424344
-
