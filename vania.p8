@@ -716,7 +716,6 @@ end
 function transitions.draw()
  cls()
  if transitions.active then
-  print(transitions.state.x .. ' x ' .. transitions.state.y, 10, 10, 7)
   if transitions.type == 'traverse_door' then
    transitions.draw_traverse_door()
   end
@@ -755,6 +754,7 @@ function transitions.draw_traverse_door()
  camera()
  spr(sprites.named.door_left, transitions.state.x + 4, transitions.state.y, 1, 1)
  spr(sprites.named.door_right, transitions.state.x - 4, transitions.state.y, 1, 1)
+ hud.draw()
 end
 
 easing = {}
