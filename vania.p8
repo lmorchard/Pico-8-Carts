@@ -55,6 +55,7 @@ screen = {
 
 function _init()
  world.init()
+ transitions.init()
  player.init()
  effects.init()
  tiles.init()
@@ -64,29 +65,39 @@ function _init()
 end
 
 function _update()
-	player.update()
- effects.update()
- tiles.update()
- rooms.update()
- particles.update()
- hud.update()
+ world.update()
+ transitions.update()
+ if not transitions.active then
+ 	player.update()
+  effects.update()
+  tiles.update()
+  rooms.update()
+  particles.update()
+  hud.update()
+ end
 end
 
 function _draw()
- effects.predraw()
- rooms.camera()
- tiles.draw()
- rooms.draw()
- player.draw()
- particles.draw()
- effects.postdraw()
- hud.draw()
+ transitions.draw()
+ if not transitions.active then
+  effects.predraw()
+  rooms.camera()
+  tiles.draw()
+  rooms.draw()
+  player.draw()
+  particles.draw()
+  effects.postdraw()
+  hud.draw()
+ end
 end
 
 world = { }
 
 function world.init()
  world.gravity = 0.3
+end
+
+function world.update()
 end
 
 rooms = {
@@ -137,7 +148,7 @@ rooms = {
 
 function rooms.init()
  rooms.is_player_on_door = false
- rooms.change(5)
+ rooms.change(1)
 end
 
 function rooms.update()
@@ -153,6 +164,7 @@ function rooms.update()
     player.position.x = to_door.x
     player.position.y = to_door.y
     rooms.is_player_on_door = true
+    transitions.traverse_door(room, door, rooms.get_current(), to_door)
     break
    end
   end
@@ -167,13 +179,17 @@ function rooms.update()
 end
 
 function rooms.camera()
- local c = rooms.get_current()
+ local result = rooms.calculate_camera(
+  rooms.get_current(), player.position.x, player.position.y)
+ camera(result.x, result.y)
+end
 
+function rooms.calculate_camera(c, px, py)
  local cx = 0
  local mw = c.w * 8
  local swh = screen.width / 2
- if (player.position.x > swh) then
-  cx = player.position.x - swh
+ if (px > swh) then
+  cx = px - swh
   if (cx > mw - screen.width) then
    cx = mw - screen.height
   end
@@ -182,14 +198,17 @@ function rooms.camera()
  local cy = 0
  local mh = c.h * 8
  local shh = screen.height / 2
- if (player.position.y > shh) then
-  cy = player.position.y - shh
+ if (py > shh) then
+  cy = py - shh
   if (cy > mh - screen.height) then
    cy = mh - screen.height
   end
  end
 
- camera(cx - c.off_x, cy - c.off_y)
+ return {
+  x=cx-c.off_x,
+  y=cy-c.off_y
+ }
 end
 
 function rooms.draw()
@@ -236,7 +255,7 @@ function player.init()
  }
  player.vision = {
   available=false,
-  active=false,
+  active=true,
   range=24
  }
 end
@@ -493,7 +512,12 @@ function motion.apply_gravity(o)
  end
 end
 
-sprites = {}
+sprites = {
+ named = {
+  door_left=74,
+  door_right=75
+ }
+}
 
 function sprites.init(frames, speed, sw, sh)
  return {
@@ -664,6 +688,109 @@ function particles.spawn(x, y, dx, dy, ttl, clr)
  local particle = { x=x, y=y, dx=dx, dy=dy, ttl=ttl, clr=clr }
  add(particles.active, particle)
 end
+
+transitions = {}
+
+function transitions.init()
+ transitions.reset()
+end
+
+function transitions.reset()
+ transitions.active = false
+ transitions.state = {}
+end
+
+function transitions.update()
+ if transitions.active then
+  if transitions.state.step >= transitions.state.duration then
+   transitions.reset()
+  else
+   transitions.state.step += 1
+   if transitions.type == 'traverse_door' then
+    transitions.update_traverse_door()
+   end
+  end
+ end
+end
+
+function transitions.draw()
+ cls()
+ if transitions.active then
+  print(transitions.state.x .. ' x ' .. transitions.state.y, 10, 10, 7)
+  if transitions.type == 'traverse_door' then
+   transitions.draw_traverse_door()
+  end
+ end
+end
+
+function transitions.traverse_door(from_room, from_door, to_room, to_door)
+ local from_cam = rooms.calculate_camera(from_room, from_door.x, from_door.y)
+ local to_cam = rooms.calculate_camera(to_room, to_door.x, to_door.y)
+ local from_x = from_door.x - from_cam.x
+ local from_y = from_door.y - from_cam.y
+ local to_x = to_door.x - to_cam.x
+ local to_y = to_door.y - to_cam.y
+
+ transitions.active = true
+ transitions.type = 'traverse_door'
+ transitions.state = {
+  step=0,
+  duration=20,
+  x=from_x,
+  y=from_y,
+  from_x=from_x,
+  from_y=from_y,
+  to_x=to_x,
+  to_y=to_y
+ }
+end
+
+function transitions.update_traverse_door()
+ local s = transitions.state
+ s.x = easing.inOutCubic(s.step, s.from_x, s.to_x - s.from_x, s.duration)
+ s.y = easing.inOutCubic(s.step, s.from_y, s.to_y - s.from_y, s.duration)
+end
+
+function transitions.draw_traverse_door()
+ camera()
+ spr(sprites.named.door_left, transitions.state.x + 4, transitions.state.y, 1, 1)
+ spr(sprites.named.door_right, transitions.state.x - 4, transitions.state.y, 1, 1)
+end
+
+easing = {}
+
+function easing.inOutCubic(t, b, c, d)
+ t = t / d * 2
+ if t < 1 then
+  return c / 2 * t * t * t + b
+ else
+  t = t - 2
+  return c / 2 * (t * t * t + 2) + b
+ end
+end
+
+function easing.inOutQuint(t, b, c, d)
+ t = t / d * 2
+ if t < 1 then
+  return c / 2 * (t * t * t * t * t) + b
+ else
+  t = t - 2
+  return c / 2 * (t * t * t * t * t + 2) + b
+ end
+end
+
+function easing.inOutBack(t, b, c, d, s)
+ if not s then s = 1.70158 end
+ s = s * 1.525
+ t = t / d * 2
+ if t < 1 then
+  return c / 2 * (t * t * ((s + 1) * t - s)) + b
+ else
+  t = t - 2
+  return c / 2 * (t * t * ((s + 1) * t + s) + 2) + b
+ end
+end
+
 
 __gfx__
 000000000044ff000044ff000044ff00000000000044ff000044ff000044ff000000000000000000000000000000000000000000000000000112211000000010
